@@ -1,0 +1,45 @@
+# Slam Stack — Kyverno Install (Helm values)
+# Policy engine for admission control
+# Install: helm repo add kyverno https://kyverno.github.io/kyverno && helm upgrade --install kyverno kyverno/kyverno -n kyverno -f install.yaml
+---
+replicaCount: 1
+extraArgs:
+  - --webhooktimeout=15
+  - --autogenInternals=true
+
+# Restrict Kyverno itself
+podSecurityStandard: restricted
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 10000
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+  seccompProfile:
+    type: RuntimeDefault
+
+config:
+  # Enable resource reporting
+  resourceFilters: "[*,*,*]"
+  # Exclude system namespaces from webhook (they're pre-approved)
+  webhooks:
+    - namespaceSelector:
+        matchExpressions:
+          - key: kubernetes.io/metadata.name
+            operator: NotIn
+            values:
+              - kyverno
+              - kube-system
+              - local-path-storage
+  generateSuccessEvents: false
+  backgroundScan: true
+  backgroundScanInterval: 1h
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

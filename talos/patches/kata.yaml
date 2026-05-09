@@ -1,0 +1,43 @@
+# Slam Stack — Kata Containers with Cloud Hypervisor (CLH)
+# Applied to Talos machine config to enable microVM isolation
+#
+# NOTE: Talos ships Kata with Cloud Hypervisor, NOT Firecracker.
+# Firecracker support was deferred upstream to keep image size small.
+# Cloud Hypervisor is also written in Rust and provides equivalent
+# hardware-level isolation via KVM microVMs.
+#
+# Usage:
+#   1. Upload this schematic to the Talos Image Factory:
+#      customization:
+#        systemExtensions:
+#          officialExtensions:
+#            - siderolabs/kata-containers
+#      curl -sX POST --data-binary @schematic.yaml \
+#        https://factory.talos.dev/schematics \
+#        -H "Content-Type: application/yaml" | jq -r '.id'
+#
+#   2. Use the returned installer image:
+#      machine:
+#        install:
+#          image: factory.talos.dev/installer/<SCHEMATIC_ID>:v1.13.0
+#
+#   3. Create the RuntimeClass:
+#      kubectl apply -f components/kata/runtimeclass.yaml
+machine:
+  kernel:
+    modules:
+      - name: vhost_net
+      - name: vhost_vsock
+      - name: vfio
+      - name: vfio_iommu_type1
+      - name: vfio_pci
+  files:
+    - content: |
+        version = 2
+        [plugins."io.containerd.cri.v1.runtime".containerd.runtimes.kata]
+          runtime_type = "io.containerd.kata.v2"
+          privileged_without_host_devices = true
+          [plugins."io.containerd.cri.v1.runtime".containerd.runtimes.kata.options]
+            ConfigPath = "/usr/local/share/kata-containers/configuration.toml"
+      path: /etc/cri/conf.d/10-kata-containers.part
+      op: merge

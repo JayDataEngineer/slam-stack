@@ -1,0 +1,180 @@
+# Slam Stack — Stalwart Mail Server (raw manifests)
+# All-in-one Rust mail server (SMTP + JMAP, no IMAP)
+# No official Helm chart exists — deployed via raw K8s manifests
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mail
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: stalwart-data
+  namespace: mail
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: mayastor
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: stalwart-tls
+  namespace: mail
+type: kubernetes.io/tls
+stringData:
+  tls.crt: ""
+  tls.key: ""
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stalwart-config
+  namespace: mail
+data:
+  config.toml: |
+    [server]
+    host = "0.0.0.0"
+
+    [server.smtp]
+    port = 465
+    tls = true
+
+    [server.jmap]
+    port = 443
+    tls = true
+
+    # IMAP disabled — use JMAP instead (lighter, modern)
+    # [server.imap]
+    # port = 993
+    # tls = true
+
+    [tls]
+    certificate = "/etc/stalwart/tls/tls.crt"
+    private-key = "/etc/stalwart/tls/tls.key"
+
+    [oidc]
+    enabled = true
+    provider = "kanidm"
+    issuer = "https://kanidm.identity:443/oauth2"
+    client-id = "stalwart"
+    # client-secret injected by Vault
+
+    [storage]
+    type = "filesystem"
+    path = "/data"
+
+    [spam.filter]
+    enabled = true
+    action = "reject"
+
+    [spam.greylist]
+    enabled = true
+    delay = 300
+
+    [spam.dnsbl]
+    enabled = true
+    zones = ["zen.spamhaus.org", "bl.spamcop.net"]
+
+    [audit]
+    enabled = true
+    remote = "tcp://victoria-logs-audit.observability:8480"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stalwart
+  namespace: mail
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stalwart
+  template:
+    metadata:
+      labels:
+        app: stalwart
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10000
+        fsGroup: 10000
+      containers:
+        - name: stalwart
+          image: ghcr.io/stalwartlabs/stalwart-mail:latest
+          args:
+            - --config
+            - /etc/stalwart/config.toml
+          ports:
+            - containerPort: 443
+              name: jmap
+            - containerPort: 465
+              name: smtps
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /etc/stalwart/config.toml
+              subPath: config.toml
+            - name: tls
+              mountPath: /etc/stalwart/tls
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 443
+              scheme: HTTPS
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 443
+              scheme: HTTPS
+            initialDelaySeconds: 15
+            periodSeconds: 15
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: stalwart-data
+        - name: config
+          configMap:
+            name: stalwart-config
+        - name: tls
+          secret:
+            secretName: stalwart-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stalwart
+  namespace: mail
+spec:
+  type: ClusterIP
+  selector:
+    app: stalwart
+  ports:
+    - name: jmap
+      port: 443
+      targetPort: 443
+    - name: smtps
+      port: 465
+      targetPort: 465

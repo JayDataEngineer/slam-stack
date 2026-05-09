@@ -1,0 +1,97 @@
+# Slam Stack — Cilium Install
+# WireGuard encryption + native identity + default-deny
+#
+# Architecture decision:
+#   - Cilium mTLS with SPIRE is currently BETA and conflicts with WireGuard
+#   - Instead: WireGuard encryption (kernel-level, stable) + Cilium security identity
+#   - Cilium identity (label-based) provides the same "who is talking" semantics
+#     as SPIFFE, without the beta risk
+#   - Result: encrypted at kernel level, identity-aware policies, no beta features
+#
+# Install: helm repo add cilium https://helm.cilium.io && \
+#   helm upgrade --install cilium cilium/cilium -n kube-system -f install.yaml
+---
+cluster:
+  name: slam-stack
+rollOutCiliumPods: true
+
+# === WireGuard encryption (kernel-level, stable) ===
+encryption:
+  enabled: true
+  type: wireguard
+  nodeEncryption: true
+
+# === Replace kube-proxy entirely ===
+kubeProxyReplacement: true
+k8sServiceHost: 127.0.0.1
+k8sServicePort: 7445
+
+# === Routing ===
+autoDirectNodeRoutes: true
+routingMode: native
+ipam:
+  mode: kubernetes
+ipv4:
+  enabled: true
+ipv6:
+  enabled: false
+endpointRoutes:
+  enabled: true
+
+# === Security identity (replaces SPIFFE for policy enforcement) ===
+# Cilium assigns a security identity to each endpoint based on labels.
+# This is used by CiliumNetworkPolicy to enforce "who can talk to whom"
+# without needing SPIRE. Combined with WireGuard, this covers both
+# identity verification and encryption.
+enableIdentityMark: true
+
+# === mTLS — DISABLED (beta, conflicts with WireGuard) ===
+authentication:
+  mutual:
+    enabled: false  # Use WireGuard + CiliumIdentity instead
+    spire:
+      enabled: false
+
+# === Hubble (minimal observability) ===
+hubble:
+  enabled: true
+  relay:
+    enabled: true
+  ui:
+    enabled: false
+  metrics:
+    enabled:
+      - dns
+      - drop
+      - tcp
+      - flow
+
+# === Network policy enforcement ===
+policyEnforcementMode: always
+enableL7Proxy: true
+
+# === BPF optimizations ===
+bpf:
+  masquerade: true
+  tproxy: true
+cgroup:
+  autoMount:
+    enabled: true
+  hostRoot: /sys/fs/cgroup
+
+# === Resource limits (lean) ===
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+operator:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi

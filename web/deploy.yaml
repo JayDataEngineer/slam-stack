@@ -1,0 +1,123 @@
+# Slam Stack — Web Dashboard K8s Deployment
+# The management UI built with Leptos + Axum
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: web
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slam-stack-web
+  namespace: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: slam-stack-web
+  template:
+    metadata:
+      labels:
+        app: slam-stack-web
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10000
+        fsGroup: 10000
+      containers:
+        - name: slam-stack-web
+          image: ghcr.io/yourorg/slam-stack-web:latest  # CHANGE ME
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: LEPTOS_SITE_ADDR
+              value: "0.0.0.0:8080"
+            - name: LEPTOS_SITE_ROOT
+              value: "/usr/local/share/slam-stack-web"
+            - name: LEPTOS_OUTPUT_NAME
+              value: "slam-stack-web"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: slam-stack-web
+  namespace: web
+spec:
+  type: ClusterIP
+  selector:
+    app: slam-stack-web
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+# Allow ingress from Headscale/Cilium only
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-to-slam-stack-web
+  namespace: web
+spec:
+  endpointSelector:
+    matchLabels:
+      app: slam-stack-web
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": network
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": identity
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": vault
+      toPorts:
+        - ports:
+            - port: "8200"
+              protocol: TCP
+    # DNS
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP

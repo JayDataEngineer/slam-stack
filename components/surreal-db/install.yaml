@@ -1,0 +1,71 @@
+# Slam Stack — SurrealDB Install
+# Multi-model database (document, graph, SQL, vector)
+# Rust-based, single binary
+# Install: helm repo add surrealdb https://helm.surrealdb.com && helm upgrade --install surrealdb surrealdb/surrealdb -n database -f install.yaml
+---
+image:
+  repository: ghcr.io/surrealdb/surrealdb
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+# === Authentication via Vault dynamic credentials ===
+config:
+  # SurrealDB connects to Vault for dynamic auth
+  auth:
+    enabled: true
+    vault:
+      enabled: true
+      addr: "https://vault.internal.slamstack:8200"
+      role: "slam-stack-app"
+      # Token injected by Vault Agent sidecar
+      token_path: "/vault/secrets/db-token"
+  # TLS enforced
+  tls:
+    enabled: true
+    cert_file: /etc/surrealdb/tls/tls.crt
+    key_file: /etc/surrealdb/tls/tls.key
+    ca_file: /etc/surrealdb/tls/ca.crt
+  # Rate limiting
+  rate_limit:
+    enabled: true
+    max_requests_per_second: 1000
+  # Auditing
+  audit:
+    enabled: true
+    endpoint: "victoria-logs-audit:8480"
+
+# === Storage via Mayastor ===
+persistence:
+  enabled: true
+  size: 20Gi
+  storageClass: mayastor
+
+# === Network ===
+service:
+  type: ClusterIP
+  ports:
+    surrealdb: 8000
+
+# === Security context ===
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10000
+  fsGroup: 10000
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+  seccompProfile:
+    type: RuntimeDefault
+
+# === Resources ===
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 1
+    memory: 512Mi

@@ -1,0 +1,57 @@
+# Slam Stack — VictoriaLogs (Immutable Audit)
+# WORM-compatible log storage
+# Install: helm repo add vm https://victoriametrics.github.io/helm-charts && helm upgrade --install victoria-logs vm/victoria-logs -n observability -f install.yaml
+---
+replicaCount: 1
+
+persistence:
+  enabled: true
+  size: 50Gi
+  storageClass: mayastor
+  # WORM-like: readOnly in the pod
+  accessMode: ReadWriteOnce
+
+server:
+  logLevel: INFO
+  # Retention: 1 year minimum for audit
+  retentionPeriod: 365d
+  # Storage config for append-only behavior
+  extraArgs:
+    - --storage.minFreeDiskSpaceBytes=10GB
+    - --storage.disableRename=false
+  # Ingest from Tetragon and Vault
+  ingestion:
+    syslog:
+      enabled: true
+      port: 8514
+    json:
+      enabled: true
+      port: 8480
+
+# === Security context ===
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 10000
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+  seccompProfile:
+    type: RuntimeDefault
+
+# === Ingress ===
+service:
+  type: ClusterIP
+  ports:
+    http: 8428
+    syslog: 8514
+    json: 8480
+
+# === Resources ===
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

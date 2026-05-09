@@ -1,0 +1,57 @@
+# Slam Stack — Tetragon Runtime Security
+# eBPF-based kernel-level enforcement
+# Install: helm repo add tetragon https://helm.cilium.io && helm upgrade --install tetragon tetragon/tetragon -n kube-system -f install.yaml
+---
+tetragon:
+  # Enable process visibility + enforcement
+  processVisibility: true
+  # Force all pods to run with Tetragon policy
+  enablePolicyFilter: true
+  # Export events to VictoriaLogs
+  export:
+    mode: "json"
+    file:
+      enabled: false
+    tcp:
+      enabled: true
+      address: "victoria-logs-audit:8480"
+
+  # Security: run Tetragon itself locked down
+  securityContext:
+    runAsNonRoot: false  # Needs root for eBPF
+    readOnlyRootFilesystem: true
+    capabilities:
+      add:
+        - BPF
+        - PERFMON
+        - NET_ADMIN
+        - SYS_ADMIN
+        - SYS_PTRACE
+      drop:
+        - ALL
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+operator:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# Export metrics to VictoriaMetrics
+prometheus:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+
+crds:
+  installMethod: helm

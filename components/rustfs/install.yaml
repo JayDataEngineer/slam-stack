@@ -1,0 +1,110 @@
+# Slam Stack — RustFS Object Storage
+# S3-compatible object storage written in Rust (MinIO alternative)
+# Features: erasure coding, WORM compliance, versioning
+# Install: (no official Helm chart yet — use raw manifests)
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: storage
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rustfs
+  namespace: storage
+spec:
+  serviceName: rustfs
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rustfs
+  template:
+    metadata:
+      labels:
+        app: rustfs
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10000
+        fsGroup: 10000
+      containers:
+        - name: rustfs
+          image: ghcr.io/rustfs/rustfs:latest
+          args:
+            - "--data-dir=/data"
+            - "--s3-port=9000"
+            - "--admin-port=9001"
+            - "--worm-enabled=true"
+            - "--erasure-coding=true"
+            - "--encryption-at-rest=true"
+          env:
+            # Vault-injected credentials
+            - name: RUSTFS_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: rustfs-credentials
+                  key: access-key
+            - name: RUSTFS_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: rustfs-credentials
+                  key: secret-key
+            - name: RUSTFS_TLS_CERT
+              value: /etc/rustfs/tls/tls.crt
+            - name: RUSTFS_TLS_KEY
+              value: /etc/rustfs/tls/tls.key
+          ports:
+            - containerPort: 9000
+              name: s3
+            - containerPort: 9001
+              name: admin
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tls
+              mountPath: /etc/rustfs/tls
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: tls
+          secret:
+            secretName: rustfs-tls
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: mayastor
+        resources:
+          requests:
+            storage: 100Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rustfs
+  namespace: storage
+spec:
+  selector:
+    app: rustfs
+  ports:
+    - name: s3
+      port: 9000
+      targetPort: 9000
+    - name: admin
+      port: 9001
+      targetPort: 9001

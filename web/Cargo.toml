@@ -1,0 +1,46 @@
+[package]
+name = "slam-stack-web"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["hydrate"]
+hydrate = ["leptos/hydrate"]
+ssr = [
+    "leptos/ssr",
+    "leptos_meta/ssr",
+    "leptos_router/ssr",
+    "dep:leptos_axum",
+    "dep:axum",
+    "dep:tokio",
+    "dep:tower-http",
+]
+
+[dependencies]
+leptos = "0.7"
+leptos_meta = "0.7"
+leptos_router = "0.7"
+leptos_axum = { version = "0.7", optional = true }
+axum = { version = "0.7", optional = true }
+tokio = { version = "1", features = ["full"], optional = true }
+tower-http = { version = "0.6", features = ["cors"], optional = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+console_error_panic_hook = "0.1"
+
+[package.metadata.leptos]
+output-name = "slam-stack-web"
+site-root = "target/site"
+site-pkg-dir = "pkg"
+style-file = "style/main.css"
+bin-features = ["ssr"]
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "z"
+strip = true

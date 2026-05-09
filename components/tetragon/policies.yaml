@@ -1,0 +1,150 @@
+# Slam Stack — Tetragon Enforcement Policies
+# These run inside the kernel via eBPF.
+# They KILL processes that violate the rules — not just log them.
+---
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: block-shell-execution
+spec:
+  description: "Kill any process that spawns a shell inside a pod"
+  kprobes:
+    - call: "sys_execve"
+      syscall: true
+      args:
+        - index: 0
+          type: "string"
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: "Equal"
+              values:
+                - "/bin/sh"
+                - "/bin/bash"
+                - "/bin/dash"
+                - "/bin/zsh"
+                - "/bin/ash"
+                - "/usr/bin/sh"
+                - "/usr/bin/bash"
+                - "/usr/bin/zsh"
+                - "sh"
+                - "bash"
+                - "dash"
+                - "zsh"
+                - "ash"
+          matchActions:
+            - action: Sigkill
+---
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: block-packet-tools
+spec:
+  description: "Kill processes using packet capture tools"
+  kprobes:
+    - call: "sys_execve"
+      syscall: true
+      args:
+        - index: 0
+          type: "string"
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: "Equal"
+              values:
+                - "/usr/bin/tcpdump"
+                - "/usr/sbin/tcpdump"
+                - "/usr/bin/tshark"
+                - "/usr/bin/nmap"
+                - "/usr/bin/ncat"
+                - "/usr/bin/nc"
+                - "/bin/nc"
+                - "/usr/sbin/tcpdump"
+                - "/usr/bin/ngrep"
+          matchActions:
+            - action: Sigkill
+---
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: block-mount-commands
+spec:
+  description: "Kill mount-related commands"
+  kprobes:
+    - call: "sys_execve"
+      syscall: true
+      args:
+        - index: 0
+          type: "string"
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: "Equal"
+              values:
+                - "/bin/mount"
+                - "/usr/bin/mount"
+                - "/bin/umount"
+                - "/usr/bin/umount"
+                - "/usr/sbin/mount"
+                - "/usr/sbin/umount"
+          matchActions:
+            - action: Sigkill
+---
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: block-suid-binaries
+spec:
+  description: "Block execution of known dangerous SUID binaries"
+  kprobes:
+    - call: "sys_execve"
+      syscall: true
+      args:
+        - index: 0
+          type: "string"
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: "Equal"
+              values:
+                - "/usr/bin/pkexec"
+                - "/usr/bin/su"
+                - "/usr/bin/sudo"
+                - "/bin/su"
+                - "/usr/bin/newgrp"
+                - "/usr/bin/chsh"
+                - "/usr/bin/chfn"
+                - "/usr/bin/gpasswd"
+                - "/usr/bin/passwd"
+                - "/usr/sbin/unix_chkpwd"
+                - "/usr/sbin/pam_timestamp_check"
+          matchActions:
+            - action: Sigkill
+---
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: block-crypto-miners
+spec:
+  description: "Kill known crypto mining processes"
+  kprobes:
+    - call: "sys_execve"
+      syscall: true
+      args:
+        - index: 0
+          type: "string"
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: "Equal"
+              values:
+                - "xmrig"
+                - "cpuminer"
+                - "minerd"
+                - "ccminer"
+                - "ethminer"
+                - "sgminer"
+                - "bfgminer"
+                - "cgminer"
+          matchActions:
+            - action: Sigkill

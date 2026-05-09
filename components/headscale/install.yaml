@@ -1,0 +1,63 @@
+# Slam Stack — Headscale (Mesh VPN)
+# Community-maintained Helm chart (upstream does not publish one)
+# Install: helm repo add gabe565 https://charts.gabe565.com && \
+#   helm upgrade --install headscale gabe565/headscale -n network -f install.yaml
+---
+# Community chart: gabe565/headscale
+# App version: v0.25.0, Chart version: v0.16.0
+
+replicaCount: 1
+
+config:
+  # OIDC via Kanidm
+  oidc:
+    issuer:
+      enabled: true
+      url: "https://id.slamstack.internal/oauth2"
+      clientId: "headscale"
+      clientSecret: ""  # Vault-injected
+    scope: ["openid", "profile", "email"]
+    onlyStartIfOidcIsAvailable: true
+
+  # ACLs: default deny
+  acl:
+    enabled: true
+    policy:
+      - action: accept
+        src: ["autogroup:member"]
+        dst: ["headscale:*"]
+
+  # DNS
+  dns:
+    domain: "slamstack.internal"
+    magicDns: true
+    baseDomain: "internal.slamstack"
+
+  # DERP (relay for NAT traversal)
+  derp:
+    urls:
+      - https://controlplane.tailscale.com/derpmap/default
+    server:
+      enabled: false
+
+# Security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10000
+  fsGroup: 10000
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+  seccompProfile:
+    type: RuntimeDefault
+
+# Resources
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi

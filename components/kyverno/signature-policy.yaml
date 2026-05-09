@@ -1,0 +1,94 @@
+# Slam Stack — Image Signature Enforcement
+# Any pod not signed by our Cosign key is REJECTED at admission.
+# Prerequisite: generate Cosign keypair and store public key as secret:
+#   cosign generate-key-pair
+#   kubectl create secret -n kyverno generic cosign-public-key --from-file=cosign.pub
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-image-signature
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: verify-cosign-signature
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      verifyImages:
+        - image: "*"
+          key: |-
+            # YOUR COSIGN PUBLIC KEY HERE
+            # Replace with: cat cosign.pub | sed 's/^/            /'
+            -----BEGIN PUBLIC KEY-----
+            MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQDQgAE...REPLACE_ME...
+            -----END PUBLIC KEY-----
+          mutateDigest: true
+          verifyDigest: true
+          required: true
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-pod-security
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: require-non-root
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: "Containers must run as non-root with read-only rootfs"
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  runAsNonRoot: true
+                  readOnlyRootFilesystem: true
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop: ["ALL"]
+                  seccompProfile:
+                    type: RuntimeDefault
+    - name: deny-host-network
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: "Host network and hostPID are forbidden"
+        pattern:
+          spec:
+            hostNetwork: false
+            hostPID: false
+            hostIPC: false
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: deny-privileged
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: deny-privileged-containers
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: "Privileged containers are not allowed"
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  privileged: false

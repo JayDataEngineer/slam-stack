@@ -1,0 +1,176 @@
+# Slam Stack — Service-Specific Network Policies (Cilium)
+# Each rule explicitly allows the minimum required communication.
+# Everything else is denied by the cluster-wide default-deny policy.
+#
+# Architecture:
+#   Ingress  → Headscale/Cloudflare Tunnel → services
+#   Kanidm   ← OIDC consumers (everything talks to Kanidm on 443)
+#   Vault    ← apps needing secrets (on 8200)
+#   SurrealDB ← apps needing database (on 8000)
+#   Stalwart  ← mail clients (on 443/465)
+#   VictoriaLogs ← apps sending audit logs (on 8480)
+#   Tetragon, Cilium → VictoriaLogs (on 8480)
+#   Apps NEVER talk to each other unless explicitly allowed
+#   Apps NEVER talk to the internet unless explicitly allowed
+---
+# === Allow traffic to Kanidm (OIDC auth) ===
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-to-kanidm
+  namespace: identity
+spec:
+  endpointSelector:
+    matchLabels:
+      app: kanidm
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": network  # Headscale
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": mail  # Stalwart
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": vault  # Vault
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+---
+# === Allow pod-to-pod traffic to SurrealDB ===
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-to-surrealdb
+  namespace: database
+spec:
+  endpointSelector:
+    matchLabels:
+      app: surrealdb
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": vault  # Vault for dynamic creds
+      toPorts:
+        - ports:
+            - port: "8000"
+              protocol: TCP
+---
+# === Allow traffic to Vault ===
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-to-vault
+  namespace: vault
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: vault
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": default
+      toPorts:
+        - ports:
+            - port: "8200"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": identity
+      toPorts:
+        - ports:
+            - port: "8200"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": mail
+      toPorts:
+        - ports:
+            - port: "8200"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": database
+      toPorts:
+        - ports:
+            - port: "8200"
+              protocol: TCP
+---
+# === Allow traffic to VictoriaLogs (audit ingestion) ===
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-to-victoria-logs
+  namespace: observability
+spec:
+  endpointSelector:
+    matchLabels:
+      app: victoria-logs
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": kube-system  # Tetragon, Cilium
+      toPorts:
+        - ports:
+            - port: "8480"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": vault  # Vault audit
+      toPorts:
+        - ports:
+            - port: "8480"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": identity  # Kanidm audit
+      toPorts:
+        - ports:
+            - port: "8480"
+              protocol: TCP
+---
+# === Allow egress for specific services (the "invisible network") ===
+# Apps cannot reach the internet unless explicitly permitted.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-vault-egress
+  namespace: vault
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: vault
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": database
+      toPorts:
+        - ports:
+            - port: "8000"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": observability
+            app: victoria-logs
+      toPorts:
+        - ports:
+            - port: "8480"
+              protocol: TCP
+    # DNS resolution
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP

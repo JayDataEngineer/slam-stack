@@ -1,0 +1,182 @@
+# Slam Stack — Kanidm Identity Provider (raw manifests)
+# Rust-based IDP with mandatory WebAuthn/Passkeys
+# No official Helm chart exists — deployed via raw K8s manifests
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: identity
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kanidm-data
+  namespace: identity
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: mayastor
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kanidm-tls
+  namespace: identity
+type: kubernetes.io/tls
+stringData:
+  tls.crt: ""  # Set via Vault PKI or cert-manager
+  tls.key: ""
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kanidm-config
+  namespace: identity
+data:
+  kanidm.toml: |
+    # Kanidm server config
+    # TLS is mandatory — Kanidm refuses to start without it
+    bindaddress = "0.0.0.0:443"
+    ldapbindaddress = "0.0.0.0:636"
+    trust_x_forward_for = true
+
+    [tls]
+    chain = "/etc/kanidm/tls/tls.crt"
+    key = "/etc/kanidm/tls/tls.key"
+
+    [database]
+    path = "/data/kanidm.db"
+    # SQLite backend — sufficient for small deployments
+    # For HA, configure PostgreSQL backend instead
+
+    [domain]
+    path = "/data/kanidm"
+    # Change this to your actual domain
+    name = "slamstack.internal"
+
+    [oauth2]
+    enabled = true
+    access_token_expiry_secs = 300
+    refresh_token_expiry_secs = 86400
+
+    [webauthn]
+    enabled = true
+    # Require hardware-backed attestation for admin accounts
+    attestation_trust_store = "/etc/kanidm/webauthn"
+
+    [ldap]
+    enabled = true
+    tls = true
+
+    [audit]
+    enabled = true
+    path = "/var/log/kanidm/audit.log"
+    # Forward to VictoriaLogs
+    remote = "tcp://victoria-logs-audit.observability:8480"
+
+    [rate_limit]
+    enabled = true
+    max_bad_password_attempts = 5
+    lockout_duration_secs = 300
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kanidm
+  namespace: identity
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kanidm
+  template:
+    metadata:
+      labels:
+        app: kanidm
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10000
+        fsGroup: 10000
+      containers:
+        - name: kanidm
+          image: ghcr.io/kanidm/kanidm:latest
+          args:
+            - server
+            - -c
+            - /etc/kanidm/kanidm.toml
+          ports:
+            - containerPort: 443
+              name: https
+            - containerPort: 636
+              name: ldaps
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /etc/kanidm/kanidm.toml
+              subPath: kanidm.toml
+            - name: tls
+              mountPath: /etc/kanidm/tls
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health/ready
+              port: 443
+              scheme: HTTPS
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 443
+              scheme: HTTPS
+            initialDelaySeconds: 10
+            periodSeconds: 15
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: kanidm-data
+        - name: config
+          configMap:
+            name: kanidm-config
+        - name: tls
+          secret:
+            secretName: kanidm-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kanidm
+  namespace: identity
+  annotations:
+    # Advertise to Cilium for network policies
+    cilium.io/use-cilium-endpoint: "true"
+spec:
+  type: ClusterIP
+  selector:
+    app: kanidm
+  ports:
+    - name: https
+      port: 443
+      targetPort: 443
+    - name: ldaps
+      port: 636
+      targetPort: 636

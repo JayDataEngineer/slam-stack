@@ -1,0 +1,19 @@
+# Slam Stack — Dev Hardening Patch (QEMU-compatible)
+# LUKS and TPM encryption not available in QEMU VMs
+machine:
+  sysctls:
+    net.ipv4.tcp_syncookies: "1"
+    net.ipv4.conf.all.rp_filter: "1"
+    net.ipv4.conf.default.rp_filter: "1"
+    net.ipv4.ip_forward: "0"
+    net.ipv6.conf.all.disable_ipv6: "1"
+    net.ipv6.conf.default.disable_ipv6: "1"
+    kernel.kptr_restrict: "2"
+    kernel.dmesg_restrict: "1"
+    kernel.printk: "3 3 3 3"
+    kernel.unprivileged_bpf_disabled: "1"
+    net.core.bpf_jit_harden: "2"
+  kernel:
+    modules:
+      - name: "bluetooth"
+      - name: "floppy"
