@@ -31,7 +31,6 @@ config:
             values:
               - kyverno
               - kube-system
-              - local-path-storage
   generateSuccessEvents: false
   backgroundScan: true
   backgroundScanInterval: 1h

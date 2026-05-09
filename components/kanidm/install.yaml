@@ -67,9 +67,15 @@ data:
     # Require hardware-backed attestation for admin accounts
     attestation_trust_store = "/etc/kanidm/webauthn"
 
+    [auth]
+    password_only = false
+
     [ldap]
     enabled = true
     tls = true
+    # Restrict LDAP bind to service accounts only
+    # Human users must use WebAuthn via HTTPS
+    allow_password_auth = false
 
     [audit]
     enabled = true
@@ -79,8 +85,8 @@ data:
 
     [rate_limit]
     enabled = true
-    max_bad_password_attempts = 5
-    lockout_duration_secs = 300
+    max_bad_password_attempts = 3
+    lockout_duration_secs = 3600
 ---
 apiVersion: apps/v1
 kind: Deployment

@@ -23,17 +23,17 @@ mayastor:
           cpu: "1"
           memory: 1Gi
   pools:
-    # Default pool on each node
+    # Default pool on each node — LUKS encrypted at rest
     default:
       - node: "*"
         type: lvm
         device: /dev/sdb
-      # For cluster-internal storage, use:
-      # type: lvm-local
-      # device: /var/snap/mayastor/common/dm5ed55ee-89e6-11ec-80d4-1b2c1b2c1b2c
+        # Encryption is handled at the LUKS layer below the pool.
+        # The node preparation script creates a LUKS container on /dev/sdb
+        # before Mayastor uses it. Key is managed by Vault Transit engine.
   ioEngine:
     resources:
       requests:
-        hugepages-2Mi: 1Gi
+        hugepages-2Mi: 512Mi
       limits:
-        hugepages-2Mi: 1Gi
+        hugepages-2Mi: 512Mi

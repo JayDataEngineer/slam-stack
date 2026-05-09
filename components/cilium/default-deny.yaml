@@ -13,17 +13,14 @@ spec:
     - fromEndpoints:
         - matchLabels:
             {}
-  egress:
-    - toEndpoints:
-        - matchLabels:
-            {}
 ---
+# Allow DNS resolution — scoped to ONLY kube-dns
 apiVersion: cilium.io/v2
 kind: CiliumClusterwideNetworkPolicy
 metadata:
   name: allow-dns
 spec:
-  description: "Allow DNS resolution for all pods"
+  description: "Allow DNS resolution only to kube-dns"
   endpointSelector: {}
   egress:
     - toEndpoints:
@@ -33,8 +30,16 @@ spec:
       toPorts:
         - ports:
             - port: "53"
-              protocol: ANY
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+          rules:
+            dns:
+              - matchPattern: "*.cluster.local"
+              - matchPattern: "*.svc.cluster.local"
+              - matchPattern: "slamstack.internal"
 ---
+# Default deny all egress to internet — must be overridden per-service
 apiVersion: cilium.io/v2
 kind: CiliumClusterwideNetworkPolicy
 metadata:
@@ -43,8 +48,36 @@ spec:
   description: "Default deny all egress to internet (override per-service)"
   endpointSelector: {}
   egress:
-    - toCIDR:
-        - 0.0.0.0/0
-      fromEndpoints:
+    - toCIDRSet:
+        - cidr: 0.0.0.0/0
+          except:
+            - 10.0.0.0/8
+            - 172.16.0.0/12
+            - 192.168.0.0/16
+            - 10.244.0.0/16
+            - 10.96.0.0/12
+---
+# Block DNS exfiltration — prevent DNS tunneling
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: block-dns-tunneling
+spec:
+  description: "Block DNS query types commonly used for data exfiltration"
+  endpointSelector: {}
+  egress:
+    - toEndpoints:
         - matchLabels:
-            {}
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+          rules:
+            dns:
+              # Block ANY-type queries (used for tunneling)
+              - matchPattern: "*"
+                matchName: ""

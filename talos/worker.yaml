@@ -35,6 +35,20 @@ machine:
     kernel.sysrq: "0"
     vm.unprivileged_userfaultfd: "0"
     user.max_user_namespaces: "0"
+    kernel.randomize_va_space: "2"
+    kernel.yama.ptrace_scope: "3"
+    fs.protected_regular: "1"
+    fs.protected_fifos: "2"
+    fs.protected_symlinks: "1"
+    fs.protected_hardlinks: "1"
+    net.ipv4.conf.all.log_martians: "1"
+    net.ipv4.conf.all.accept_source_route: "0"
+    net.ipv4.conf.default.accept_source_route: "0"
+    net.ipv4.tcp_rfc1337: "1"
+    net.ipv4.icmp_ignore_bogus_error_responses: "1"
+    net.ipv4.conf.all.send_redirects: "0"
+    net.ipv4.conf.default.send_redirects: "0"
+    net.ipv4.conf.all.drop_gratuitous_arp: "1"
   kernel:
     modules:
       - name: "usb-storage"
@@ -46,6 +60,17 @@ machine:
       - name: "nfsv4"
       - name: "can"
       - name: "btusb"
+      - name: "dccp"
+      - name: "sctp"
+      - name: "rds"
+      - name: "tipc"
+      - name: "jffs2"
+      - name: "hfs"
+      - name: "hfsplus"
+      - name: "udf"
+      - name: "freevxfs"
+      - name: "jffs"
+      - name: "cramfs"
   install:
     disk: /dev/sda
     image: ghcr.io/siderolabs/installer:latest

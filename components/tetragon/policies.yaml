@@ -148,3 +148,210 @@ spec:
                 - "cgminer"
           matchActions:
             - action: Sigkill
+---
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: block-download-tools
+spec:
+  description: "Kill download tools — no fetching external resources inside pods"
+  kprobes:
+    - call: "sys_execve"
+      syscall: true
+      args:
+        - index: 0
+          type: "string"
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: "Equal"
+              values:
+                - "/usr/bin/wget"
+                - "/usr/bin/curl"
+                - "/usr/bin/aria2c"
+                - "/usr/bin/axel"
+                - "/usr/local/bin/wget"
+                - "/usr/local/bin/curl"
+                - "wget"
+                - "curl"
+                - "aria2c"
+          matchActions:
+            - action: Sigkill
+---
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: block-remote-access
+spec:
+  description: "Kill remote access tools — no SSH, telnet, or rsh inside pods"
+  kprobes:
+    - call: "sys_execve"
+      syscall: true
+      args:
+        - index: 0
+          type: "string"
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: "Equal"
+              values:
+                - "/usr/bin/ssh"
+                - "/usr/bin/scp"
+                - "/usr/bin/sftp"
+                - "/usr/bin/telnet"
+                - "/usr/bin/rsh"
+                - "/usr/bin/sshpass"
+                - "/usr/bin/autossh"
+                - "/usr/sbin/sshd"
+                - "ssh"
+                - "scp"
+                - "sftp"
+                - "telnet"
+          matchActions:
+            - action: Sigkill
+---
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: block-process-injection
+spec:
+  description: "Kill any ptrace attach attempt — prevents process injection and debugging"
+  kprobes:
+    - call: "sys_ptrace"
+      syscall: true
+      args:
+        - index: 0
+          type: "int"
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: "Equal"
+              values:
+                - "16"  # PTRACE_ATTACH
+          matchActions:
+            - action: Sigkill
+---
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: block-container-escape
+spec:
+  description: "Kill attempts to access container runtime sockets — prevents container escape"
+  kprobes:
+    - call: "sys_openat"
+      syscall: true
+      args:
+        - index: 1
+          type: "string"
+      selectors:
+        - matchArgs:
+            - index: 1
+              operator: "Equal"
+              values:
+                - "/var/run/docker.sock"
+                - "/run/docker.sock"
+                - "/run/containerd.sock"
+                - "/var/run/containerd.sock"
+                - "/run/crio/crio.sock"
+          matchActions:
+            - action: Sigkill
+---
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: block-memory-access
+spec:
+  description: "Kill attempts to access raw memory devices — prevents memory manipulation"
+  kprobes:
+    - call: "sys_openat"
+      syscall: true
+      args:
+        - index: 1
+          type: "string"
+      selectors:
+        - matchArgs:
+            - index: 1
+              operator: "Equal"
+              values:
+                - "/dev/mem"
+                - "/dev/kmem"
+                - "/dev/port"
+          matchActions:
+            - action: Sigkill
+---
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: block-debug-tools
+spec:
+  description: "Kill debugging and inspection tools inside pods"
+  kprobes:
+    - call: "sys_execve"
+      syscall: true
+      args:
+        - index: 0
+          type: "string"
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: "Equal"
+              values:
+                - "/usr/bin/gdb"
+                - "/usr/bin/strace"
+                - "/usr/bin/ltrace"
+                - "/usr/bin/lsof"
+                - "/usr/bin/objdump"
+                - "/usr/bin/readelf"
+                - "/usr/bin/strings"
+                - "gdb"
+                - "strace"
+                - "ltrace"
+                - "lsof"
+          matchActions:
+            - action: Sigkill
+---
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: block-sensitive-file-read
+spec:
+  description: "Kill attempts to read sensitive system files from inside pods"
+  kprobes:
+    - call: "sys_openat"
+      syscall: true
+      args:
+        - index: 1
+          type: "string"
+      selectors:
+        - matchArgs:
+            - index: 1
+              operator: "Equal"
+              values:
+                - "/etc/shadow"
+                - "/etc/passwd"
+                - "/etc/gshadow"
+                - "/etc/ssh/sshd_config"
+          matchActions:
+            - action: Sigkill
+---
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: block-data-exfil-devices
+spec:
+  description: "Kill dd and file copy to network device files — prevents data exfiltration"
+  kprobes:
+    - call: "sys_openat"
+      syscall: true
+      args:
+        - index: 1
+          type: "string"
+      selectors:
+        - matchArgs:
+            - index: 1
+              operator: "Postfix"
+              values:
+                - "/dev/tcp/"
+                - "/dev/udp/"
+          matchActions:
+            - action: Sigkill

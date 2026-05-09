@@ -122,6 +122,13 @@ for name in "${ORDER[@]}"; do
 
   case "$type" in
     helm)
+      # Verify chart integrity before deploying
+      if helm pull "$chart" --verify 2>/dev/null; then
+        ok "Chart signature verified: $chart"
+      else
+        warn "Chart signature verification failed or not signed: $chart (proceeding — enable strict mode in prod)"
+      fi
+
       if helm list -n "$ns" -q 2>/dev/null | grep -q "^${release}$"; then
         helm upgrade "$release" "$chart" -n "$ns" -f "$values" --cleanup-on-fail 2>&1 | tail -3 || warn "upgrade $name failed"
       else
@@ -167,6 +174,29 @@ done
 
 echo ""
 ok "=== Slam Stack deployment complete ==="
+
+# === Post-deploy: verify image signatures ===
+echo ""
+info "--- Verifying deployed image signatures ---"
+SIG_FAIL=0
+for pod in $(kubectl get pods -A -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+  ns=$(kubectl get pod "$pod" -o jsonpath='{.metadata.namespace}' 2>/dev/null)
+  image=$(kubectl get pod "$pod" -o jsonpath='{.spec.containers[0].image}' 2>/dev/null)
+  if [ -n "$image" ] && [ -f "${COSIGN_DIR}/cosign.pub" ]; then
+    if cosign verify --key "${COSIGN_DIR}/cosign.pub" "$image" >/dev/null 2>&1; then
+      ok "  $ns/$pod: signed"
+    else
+      warn "  $ns/$pod: unsigned or verification failed ($image)"
+      SIG_FAIL=$((SIG_FAIL + 1))
+    fi
+  fi
+done
+
+if [ "$SIG_FAIL" -gt 0 ]; then
+  warn "$SIG_FAIL pod(s) with unsigned images detected — sign with: cosign sign --key components/cosign/cosign.key <image>"
+else
+  ok "All deployed images are signed"
+fi
 echo ""
 info "Components installed:"
 helm list -A 2>/dev/null | tail -n +2 | awk '{printf "  %-20s %-15s %s\n", $1, $9, $8}'

@@ -50,6 +50,11 @@ spec:
                 secretKeyRef:
                   name: rustfs-credentials
                   key: secret-key
+            # Vault Transit KMS for encryption key management
+            - name: RUSTFS_KMS_ENDPOINT
+              value: "https://vault.vault.svc.cluster.local:8200/v1/transit"
+            - name: RUSTFS_KMS_KEY_NAME
+              value: "rustfs-encryption"
             - name: RUSTFS_TLS_CERT
               value: /etc/rustfs/tls/tls.crt
             - name: RUSTFS_TLS_KEY
@@ -78,7 +83,7 @@ spec:
               memory: 256Mi
             limits:
               cpu: 500m
-              memory: 512Mi
+              memory: 256Mi
       volumes:
         - name: tls
           secret:

@@ -16,13 +16,13 @@ server:
     size: 1Gi
   # In-memory only for the seal/root
   extraEnvironmentVars:
-    VAULT_SEAL_TYPE: shamir
+    VAULT_SEAL_TYPE: pkcs11
     VAULT_LOCAL_CONFIG: |-
       storage "file" {
         path = "/vault/data"
       }
       listener "tcp" {
-        address = "0.0.0.0:8200"
+        address = "127.0.0.1:8200"
         tls_disable = false
         tls_cert_file = "/vault/tls/tls.crt"
         tls_key_file = "/vault/tls/tls.key"
@@ -37,6 +37,7 @@ server:
       }
       api_addr = "https://vault.internal.slamstack:8200"
       cluster_addr = "https://vault.internal.slamstack:8201"
+      disable_mlock = false
 
   # === HA mode ===
   ha:
@@ -55,26 +56,22 @@ server:
         }
         cluster_name = "slam-stack"
         listener "tcp" {
-          address = "0.0.0.0:8200"
+          address = "127.0.0.1:8200"
           tls_disable = false
         }
-        seal "shamir" {}
+        seal "pkcs11" {
+          lib = "/usr/lib/x86_64-linux-gnu/libtpm2_pkcs11.so"
+          slot = "0"
+          pin = ""
+          key_label = "vault-unseal"
+          mechanism = 0x1089
+        }
         audit "socket" {
           address = "victoria-logs-audit:8480"
           socket_type = "tcp"
           mode = "stream"
         }
-
-  # === Auto-unseal via TPM (requires TPM device) ===
-  # For dev without TPM, use shamir + manual unseal
-  # For prod with TPM, swap seal config:
-  # seal "pkcs11" {
-  #   lib = "/usr/lib/x86_64-linux-gnu/libtpm2_pkcs11.so"
-  #   slot = "0"
-  #   pin = ""
-  #   key_label = "vault-unseal"
-  #   mechanism = 0x1089
-  # }
+        disable_mlock = false
 
   # === Ingress ===
   service:
