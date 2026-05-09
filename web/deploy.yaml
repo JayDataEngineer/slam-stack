@@ -38,6 +38,24 @@ spec:
               value: "/usr/local/share/slam-stack-web"
             - name: LEPTOS_OUTPUT_NAME
               value: "slam-stack-web"
+            - name: SURREALDB_URL
+              value: "http://surrealdb.database.svc.cluster.local:8000"
+            - name: SURREALDB_NS
+              value: "slamstack"
+            - name: SURREALDB_DB
+              value: "dashboard"
+            - name: SURREALDB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: web-db-credentials
+                  key: username
+                  optional: true
+            - name: SURREALDB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: web-db-credentials
+                  key: password
+                  optional: true
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

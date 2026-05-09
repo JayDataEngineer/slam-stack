@@ -2,7 +2,9 @@ web/target/
 **/target/
 *.tar
 cosign.key
-cosign.pub
 *.age
+*.pem
+.env
+build.sh.bundle
 _site/
 _out/

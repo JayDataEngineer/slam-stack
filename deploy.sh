@@ -50,10 +50,11 @@ declare -A DEPLOY=(
   ["kanidm"]="raw|kanidm||identity|${COMPONENTS}/kanidm/install.yaml"
   ["stalwart"]="raw|stalwart||mail|${COMPONENTS}/stalwart/install.yaml"
   ["rustfs"]="raw|rustfs||storage|${COMPONENTS}/rustfs/install.yaml"
+  ["simplex"]="raw|simplex||comms|${COMPONENTS}/simplex/install.yaml"
   ["web"]="raw|web||web|${SCRIPT_DIR}/web/deploy.yaml"
 )
 
-ORDER=(kyverno tetragon victoria-logs vault mayastor registry kanidm headscale surrealdb stalwart rustfs web)
+ORDER=(kyverno tetragon victoria-logs vault mayastor registry kanidm headscale surrealdb stalwart rustfs simplex web)
 
 # === Cosign key management ===
 COSIGN_DIR="${SCRIPT_DIR}/components/cosign"
@@ -204,6 +205,7 @@ echo "  registry (raw)"
 echo "  kanidm (raw)"
 echo "  stalwart (raw)"
 echo "  rustfs (raw)"
+echo "  simplex (raw)"
 echo "  web (raw)"
 echo ""
 info "Run ./verify.sh to check security posture."

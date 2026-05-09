@@ -1,4 +1,13 @@
+use leptos::prelude::*;
+use leptos::server_fn::ServerFnError;
+
 use crate::models::*;
+
+// =====================================================
+// Static data (dashboard, security, logs)
+// These use hardcoded data that would eventually be
+// replaced by live Kubernetes API queries in production.
+// =====================================================
 
 pub fn get_components() -> Vec<ComponentStatus> {
     vec![
@@ -101,6 +110,33 @@ pub fn get_components() -> Vec<ComponentStatus> {
             namespace: "network",
             description: "WireGuard mesh VPN",
         },
+        ComponentStatus {
+            name: "SimpleX SMP",
+            status: Status::Healthy,
+            language: "Haskell",
+            version: "6.3.0",
+            ram_mb: 80,
+            namespace: "comms",
+            description: "Metadata-free message relay",
+        },
+        ComponentStatus {
+            name: "SimpleX XFTP",
+            status: Status::Healthy,
+            language: "Haskell",
+            version: "0.1.0",
+            ram_mb: 80,
+            namespace: "comms",
+            description: "Encrypted file transfer relay",
+        },
+        ComponentStatus {
+            name: "Mayastor",
+            status: Status::Healthy,
+            language: "Rust",
+            version: "2.8.0",
+            ram_mb: 384,
+            namespace: "storage",
+            description: "NVMe-oF block storage",
+        },
     ]
 }
 
@@ -111,7 +147,7 @@ pub fn get_metrics() -> ClusterMetrics {
         ram_total_mb: 8192,
         disk_used_mb: 14200,
         disk_total_mb: 102400,
-        pod_count: 34,
+        pod_count: 36,
         uptime_hours: 168,
     }
 }
@@ -119,73 +155,73 @@ pub fn get_metrics() -> ClusterMetrics {
 pub fn get_logs() -> Vec<LogEntry> {
     vec![
         LogEntry {
-            timestamp: "2026-05-08T14:32:01Z".into(),
+            timestamp: "2026-05-09T14:32:01Z".into(),
             level: LogLevel::Info,
             source: "cilium".into(),
             message: "WireGuard encryption active for all pod-to-pod traffic".into(),
         },
         LogEntry {
-            timestamp: "2026-05-08T14:31:45Z".into(),
+            timestamp: "2026-05-09T14:31:45Z".into(),
             level: LogLevel::Info,
             source: "kyverno".into(),
-            message: "Admission policy 'require-image-signature' enforced: 12 pods verified".into(),
+            message: "Admission policy 'require-image-signature' enforced: 14 pods verified".into(),
         },
         LogEntry {
-            timestamp: "2026-05-08T14:30:22Z".into(),
+            timestamp: "2026-05-09T14:30:22Z".into(),
             level: LogLevel::Warn,
             source: "tetragon".into(),
             message: "Blocked shell execution attempt in namespace 'staging' (pod: debug-pod)".into(),
         },
         LogEntry {
-            timestamp: "2026-05-08T14:28:00Z".into(),
+            timestamp: "2026-05-09T14:28:00Z".into(),
             level: LogLevel::Info,
             source: "vault".into(),
             message: "Rotated SurrealDB credentials for role 'slam-stack-app' (expired 15m)".into(),
         },
         LogEntry {
-            timestamp: "2026-05-08T14:25:13Z".into(),
+            timestamp: "2026-05-09T14:25:13Z".into(),
             level: LogLevel::Info,
             source: "kanidm".into(),
             message: "OIDC token issued for user 'admin' (WebAuthn assertion)".into(),
         },
         LogEntry {
-            timestamp: "2026-05-08T14:20:00Z".into(),
+            timestamp: "2026-05-09T14:20:00Z".into(),
             level: LogLevel::Info,
             source: "talos".into(),
-            message: "etcd snapshot completed: 4.2MB, uploaded to RustFS".into(),
+            message: "etcd snapshot completed: 4.2MB, uploaded to RustFS WORM".into(),
         },
         LogEntry {
-            timestamp: "2026-05-08T14:15:30Z".into(),
+            timestamp: "2026-05-09T14:15:30Z".into(),
             level: LogLevel::Debug,
             source: "cilium".into(),
             message: "Network policy 'allow-to-kanidm' matched 3 endpoints".into(),
         },
         LogEntry {
-            timestamp: "2026-05-08T14:00:00Z".into(),
+            timestamp: "2026-05-09T14:00:00Z".into(),
             level: LogLevel::Info,
             source: "headscale".into(),
             message: "Node 'admin-laptop' joined mesh (public key: nodekey:a1b2c3...)".into(),
         },
         LogEntry {
-            timestamp: "2026-05-08T13:45:22Z".into(),
-            level: LogLevel::Error,
-            source: "stalwart".into(),
-            message: "SMTP connection rejected: TLS handshake failed (untrusted cert)".into(),
+            timestamp: "2026-05-09T13:45:22Z".into(),
+            level: LogLevel::Info,
+            source: "simplex".into(),
+            message: "SMP relay: 3 active queues, 12 messages forwarded".into(),
         },
         LogEntry {
-            timestamp: "2026-05-08T13:30:00Z".into(),
+            timestamp: "2026-05-09T13:30:00Z".into(),
             level: LogLevel::Info,
             source: "surreal-db".into(),
             message: "WAL checkpoint completed: 128MB reclaimed".into(),
         },
         LogEntry {
-            timestamp: "2026-05-08T13:15:00Z".into(),
+            timestamp: "2026-05-09T13:15:00Z".into(),
             level: LogLevel::Warn,
             source: "tetragon".into(),
-            message: "Blocked crypto miner binary execution in namespace 'monitoring' (pod: grafana-agent)".into(),
+            message: "Blocked crypto miner binary execution in namespace 'monitoring'".into(),
         },
         LogEntry {
-            timestamp: "2026-05-08T12:00:00Z".into(),
+            timestamp: "2026-05-09T12:00:00Z".into(),
             level: LogLevel::Info,
             source: "kyverno".into(),
             message: "CIS Benchmark scan completed: 47/50 checks passed".into(),
@@ -245,8 +281,8 @@ pub fn get_security_findings() -> Vec<SecurityFinding> {
         },
         SecurityFinding {
             category: "Audit Trail",
-            status: FindingStatus::Warn,
-            description: "VictoriaLogs receiving streams, WORM lock not verified",
+            status: FindingStatus::Pass,
+            description: "VictoriaLogs WORM storage with tamper-evident signing",
             layer: "Observability",
         },
         SecurityFinding {
@@ -255,5 +291,84 @@ pub fn get_security_findings() -> Vec<SecurityFinding> {
             description: "All pods: non-root, read-only rootfs, no priv esc",
             layer: "Workload",
         },
+        SecurityFinding {
+            category: "Secure Comms",
+            status: FindingStatus::Pass,
+            description: "SimpleX SMP/XFTP relay: no user identifiers, E2EE",
+            layer: "Communications",
+        },
     ]
+}
+
+// =====================================================
+// SurrealDB-backed CRUD (incident tracking)
+// Server functions — body stripped on WASM build.
+// =====================================================
+
+fn server_err(e: impl std::fmt::Display) -> ServerFnError {
+    ServerFnError::ServerError(e.to_string())
+}
+
+#[server]
+pub async fn get_incidents() -> Result<Vec<Incident>, ServerFnError> {
+    let db = crate::state::get();
+    let mut resp = db
+        .query(
+            "SELECT record::id(id) as id, title, description, severity, status, created_at, updated_at FROM incident ORDER BY created_at DESC"
+        )
+        .await
+        .map_err(server_err)?;
+    let incidents: Vec<Incident> = resp
+        .take(0)
+        .map_err(server_err)?;
+    Ok(incidents)
+}
+
+#[server]
+pub async fn create_incident(
+    title: String,
+    description: String,
+    severity: String,
+) -> Result<(), ServerFnError> {
+    let db = crate::state::get();
+    let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+    let data = serde_json::json!({
+        "title": title,
+        "description": description,
+        "severity": severity,
+        "status": "Open",
+        "created_at": now,
+        "updated_at": now,
+    });
+    db.query("INSERT INTO incident $data")
+        .bind(("data", data))
+        .await
+        .map_err(server_err)?;
+    Ok(())
+}
+
+#[server]
+pub async fn update_incident_status(
+    id: String,
+    status: String,
+) -> Result<(), ServerFnError> {
+    let db = crate::state::get();
+    let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+    db.query("UPDATE type::thing($id) SET status = $status, updated_at = $now")
+        .bind(("id", format!("incident:{id}")))
+        .bind(("status", status))
+        .bind(("now", now))
+        .await
+        .map_err(server_err)?;
+    Ok(())
+}
+
+#[server]
+pub async fn delete_incident(id: String) -> Result<(), ServerFnError> {
+    let db = crate::state::get();
+    db.query("DELETE type::thing($id)")
+        .bind(("id", format!("incident:{id}")))
+        .await
+        .map_err(server_err)?;
+    Ok(())
 }

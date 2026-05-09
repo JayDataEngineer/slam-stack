@@ -1,6 +1,6 @@
 [package]
 name = "slam-stack-web"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [lib]
@@ -17,6 +17,7 @@ ssr = [
     "dep:axum",
     "dep:tokio",
     "dep:tower-http",
+    "dep:surrealdb",
 ]
 
 [dependencies]
@@ -27,6 +28,7 @@ leptos_axum = { version = "0.7", optional = true }
 axum = { version = "0.7", optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
 tower-http = { version = "0.6", features = ["cors"], optional = true }
+surrealdb = { version = "2", features = ["protocol-http"], optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chrono = { version = "0.4", features = ["serde"] }

@@ -1,0 +1,246 @@
+# Slam Stack — SimpleX Chat (SMP + XFTP servers)
+# Last-resort secure communication fallback for ~50 users
+# No user identifiers whatsoever, metadata-minimizing protocol
+# SMP relay: message queue (Haskell, ~50-80MB RAM)
+# XFTP relay: file transfers (~50-80MB RAM)
+# Install: kubectl apply -f install.yaml (via deploy.sh)
+#
+# After first deploy, get the SMP fingerprint:
+#   kubectl logs -n comms smp-server-<pod> | grep "Fingerprint"
+#   OR: kubectl exec -n comms smp-server-<pod> -- cat /var/opt/simplex/fp
+# Users connect with: smp://<fingerprint>@<headscale-ip>:5223
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: comms
+---
+# === SMP Server Config ===
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: smp-server-config
+  namespace: comms
+data:
+  smp-server.ini: |
+    [STORE_LOG]
+    enable: on
+    restore_messages: on
+    [AUTH]
+    [TRANSPORT]
+    host: 0.0.0.0
+    port: 5223
+    log_tls_errors: on
+    [WEB]
+    enable: on
+    host: 0.0.0.0
+    port: 443
+---
+# === SMP Queue Creation Password ===
+apiVersion: v1
+kind: Secret
+metadata:
+  name: smp-server-auth
+  namespace: comms
+type: Opaque
+stringData:
+  # Generate with: openssl rand -base64 32 | tr -d '\n'
+  # This password is required to create new message queues,
+  # preventing unauthorized use of your relay.
+  password: "REPLACE-ME-BEFORE-DEPLOY"
+---
+# === SMP Server State ===
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: smp-server-state
+  namespace: comms
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: mayastor
+  resources:
+    requests:
+      storage: 5Gi
+---
+# === SMP Server ===
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: smp-server
+  namespace: comms
+spec:
+  serviceName: smp-server
+  replicas: 1
+  selector:
+    matchLabels:
+      app: smp-server
+  template:
+    metadata:
+      labels:
+        app: smp-server
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10000
+        fsGroup: 10000
+      containers:
+        - name: smp-server
+          image: simplexchat/smp-server:latest
+          ports:
+            - containerPort: 5223
+              name: smp
+            - containerPort: 443
+              name: web
+          volumeMounts:
+            - name: state
+              mountPath: /var/opt/simplex
+            - name: config
+              mountPath: /etc/opt/simplex
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      volumes:
+        - name: config
+          configMap:
+            name: smp-server-config
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: state
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: mayastor
+        resources:
+          requests:
+            storage: 5Gi
+---
+# === SMP Server Service ===
+apiVersion: v1
+kind: Service
+metadata:
+  name: smp-server
+  namespace: comms
+spec:
+  selector:
+    app: smp-server
+  ports:
+    - name: smp
+      port: 5223
+      targetPort: 5223
+    - name: web
+      port: 443
+      targetPort: 443
+---
+# === XFTP Server Config ===
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: xftp-server-config
+  namespace: comms
+data:
+  xftp-server.ini: |
+    [STORE_LOG]
+    enable: on
+    [TRANSPORT]
+    host: 0.0.0.0
+    port: 443
+    log_tls_errors: on
+    [FILES]
+    path: /var/opt/simplex-xftp/files
+    quota: 10gb
+---
+# === XFTP Server ===
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: xftp-server
+  namespace: comms
+spec:
+  serviceName: xftp-server
+  replicas: 1
+  selector:
+    matchLabels:
+      app: xftp-server
+  template:
+    metadata:
+      labels:
+        app: xftp-server
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10000
+        fsGroup: 10000
+      containers:
+        - name: xftp-server
+          image: simplexchat/xftp-server:latest
+          ports:
+            - containerPort: 443
+              name: web
+          volumeMounts:
+            - name: files
+              mountPath: /var/opt/simplex-xftp
+            - name: config
+              mountPath: /etc/opt/simplex-xftp
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      volumes:
+        - name: config
+          configMap:
+            name: xftp-server-config
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: files
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: mayastor
+        resources:
+          requests:
+            storage: 20Gi
+---
+# === XFTP Server Service ===
+apiVersion: v1
+kind: Service
+metadata:
+  name: xftp-server
+  namespace: comms
+spec:
+  selector:
+    app: xftp-server
+  ports:
+    - name: web
+      port: 443
+      targetPort: 443

@@ -17,6 +17,7 @@ pub fn App() -> impl IntoView {
                         <Route path=StaticSegment("/") view=pages::dashboard::DashboardPage/>
                         <Route path=StaticSegment("/security") view=pages::security::SecurityPage/>
                         <Route path=StaticSegment("/logs") view=pages::logs::LogsPage/>
+                        <Route path=StaticSegment("/incidents") view=pages::incidents::IncidentsPage/>
                     </Routes>
                 </main>
             </Router>
@@ -29,19 +30,23 @@ fn Sidebar() -> impl IntoView {
     let location = leptos_router::hooks::use_location();
 
     let is_active = move |path: &str| {
-        location.pathname.get().starts_with(path)
+        let current = location.pathname.get();
+        if path == "/" {
+            current == "/"
+        } else {
+            current.starts_with(path)
+        }
     };
 
     view! {
         <aside class="sidebar">
             <div class="sidebar-brand">
-                <span>"⚡"</span>
-                <span>"SLAM STACK"</span>
+                <span>"SLAM"</span>
             </div>
             <nav class="sidebar-nav">
                 <a
                     href="/"
-                    class:active=move || is_active("/") && location.pathname.get() == "/"
+                    class:active=move || is_active("/")
                     class="nav-item"
                 >
                     <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor">
@@ -60,6 +65,16 @@ fn Sidebar() -> impl IntoView {
                     "Security"
                 </a>
                 <a
+                    href="/incidents"
+                    class:active=move || is_active("/incidents")
+                    class="nav-item"
+                >
+                    <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M8.5 1a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V1zM6.5 3a.5.5 0 0 0-1 0v4a.5.5 0 0 0 1 0V3zm4 0a.5.5 0 0 0-1 0v4a.5.5 0 0 0 1 0V3zM4.5 5a.5.5 0 0 0-1 0v3a.5.5 0 0 0 1 0V5zm7 0a.5.5 0 0 0-1 0v3a.5.5 0 0 0 1 0V5zM3 8.5A3.5 3.5 0 0 0 6.5 12h3a3.5 3.5 0 0 0 1.5-6.66V4.5a4.5 4.5 0 0 0-9 0v.84A3.5 3.5 0 0 0 3 8.5z"/>
+                    </svg>
+                    "Incidents"
+                </a>
+                <a
                     href="/logs"
                     class:active=move || is_active("/logs")
                     class="nav-item"
@@ -70,8 +85,8 @@ fn Sidebar() -> impl IntoView {
                     "Logs"
                 </a>
             </nav>
-            <div style="border-top: 1px solid var(--border); padding-top: 12px; font-size: 11px; color: var(--text-muted);">
-                "v0.1.0 · Rust 100%"
+            <div class="sidebar-footer">
+                "v0.2.0 · Rust/WASM"
             </div>
         </aside>
     }

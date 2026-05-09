@@ -34,7 +34,8 @@
 │  (only path into the cluster)                        │
 ├─────────────────────────────────────────────────────┤
 │  SurrealDB (database) + Stalwart (JMAP email)        │
-│  + Registry + Web Dashboard                          │
+│  + SimpleX Chat (SMP + XFTP relay) + Registry        │
+│  + Web Dashboard                                     │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -75,7 +76,8 @@ All components deploy in dependency order via `deploy.sh`:
 10. SurrealDB (database)
 11. Stalwart (JMAP email)
 12. RustFS (WORM object storage)
-13. Web dashboard
+13. SimpleX Chat (secure messaging relay)
+14. Web dashboard
 
 ### Verify
 
@@ -114,6 +116,7 @@ slam-stack/
 │   ├── rustfs/         # WORM object storage
 │   ├── victoria-logs/  # Audit log aggregation
 │   ├── headscale/      # Mesh VPN
+│   ├── simplex/        # Secure messaging (SMP + XFTP relay)
 │   ├── surreal-db/     # Multi-model database
 │   ├── stalwart/       # JMAP email server
 │   ├── kata/           # MicroVM runtime class
@@ -145,10 +148,12 @@ slam-stack/
 | RustFS | 100m | 256Mi | 256Mi |
 | Stalwart | 100m | 128Mi | 512Mi |
 | Headscale | 50m | 64Mi | 256Mi |
+| SimpleX SMP | 50m | 64Mi | 128Mi |
+| SimpleX XFTP | 50m | 64Mi | 128Mi |
 | Registry | 50m | 64Mi | 256Mi |
-| **Total** | **~1.5** | **~2.6Gi** | **~5.0Gi** |
+| **Total** | **~1.7** | **~2.8Gi** | **~5.5Gi** |
 
-Fits in 8GB with ~1.5GB for Talos overhead.
+Fits in 8GB with ~1.5GB for Talos overhead. SimpleX adds ~256Mi total — lightweight.
 
 ## License
 

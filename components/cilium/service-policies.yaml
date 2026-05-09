@@ -245,6 +245,13 @@ spec:
         - ports:
             - port: "8480"
               protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": comms  # SimpleX audit
+      toPorts:
+        - ports:
+            - port: "8480"
+              protocol: TCP
 ---
 # === Allow traffic to RustFS (object storage) ===
 apiVersion: cilium.io/v2
@@ -460,6 +467,75 @@ spec:
       toPorts:
         - ports:
             - port: "8000"
+              protocol: TCP
+---
+# === SimpleX SMP server (secure messaging relay) ===
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-to-smp-server
+  namespace: comms
+spec:
+  endpointSelector:
+    matchLabels:
+      app: smp-server
+  ingress:
+    # Only reachable via Headscale mesh VPN
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": network
+      toPorts:
+        - ports:
+            - port: "5223"
+              protocol: TCP
+            - port: "443"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": observability
+            app: victoria-logs
+      toPorts:
+        - ports:
+            - port: "8480"
+              protocol: TCP
+---
+# === SimpleX XFTP server (file transfer relay) ===
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-to-xftp-server
+  namespace: comms
+spec:
+  endpointSelector:
+    matchLabels:
+      app: xftp-server
+  ingress:
+    # Only reachable via Headscale mesh VPN
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": network
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": observability
+            app: victoria-logs
+      toPorts:
+        - ports:
+            - port: "8480"
+              protocol: TCP
+    # XFTP may need to reach SMP server for notifications
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": comms
+            app: smp-server
+      toPorts:
+        - ports:
+            - port: "5223"
               protocol: TCP
 ---
 # === Mayastor storage ===
