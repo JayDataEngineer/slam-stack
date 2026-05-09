@@ -49,7 +49,7 @@ declare -A DEPLOY=(
   ["headscale"]="helm|headscale|gabe565/headscale|network|${COMPONENTS}/headscale/install.yaml"
   ["surrealdb"]="helm|surrealdb|surrealdb/surrealdb|database|${COMPONENTS}/surreal-db/install.yaml"
   ["mayastor"]="helm|openebs|openebs/mayastor|storage|${COMPONENTS}/mayastor/install.yaml"
-  ["registry"]="raw|registry||default|${COMPONENTS}/registry/install.yaml"
+  ["registry"]="raw|registry||registry|${COMPONENTS}/registry/install.yaml"
   ["kanidm"]="raw|kanidm||identity|${COMPONENTS}/kanidm/install.yaml"
   ["stalwart"]="raw|stalwart||mail|${COMPONENTS}/stalwart/install.yaml"
   ["rustfs"]="raw|rustfs||storage|${COMPONENTS}/rustfs/install.yaml"
@@ -58,7 +58,7 @@ declare -A DEPLOY=(
   ["backup"]="raw|backup||backup|${COMPONENTS}/backup/install.yaml"
 )
 
-ORDER=(kyverno tetragon victoria-logs victoria-metrics vault cert-manager mayastor registry kanidm headscale surrealdb stalwart rustfs simplex web backup)
+ORDER=(cilium kyverno tetragon victoria-logs victoria-metrics vault cert-manager mayastor registry kanidm headscale surrealdb stalwart rustfs simplex web backup)
 
 # === Cosign key management ===
 COSIGN_DIR="${SCRIPT_DIR}/components/cosign"
@@ -115,6 +115,15 @@ fi
 if kubectl -n kube-system get pods -l k8s-app=cilium -o name 2>/dev/null | grep -q .; then
   info "Waiting for Cilium to be ready..."
   kubectl -n kube-system wait --for=condition=ready pod -l k8s-app=cilium --timeout=300s 2>/dev/null || warn "Cilium not ready yet"
+fi
+
+# === Pre-deploy: ServiceAccounts (must exist before pods are created) ===
+echo ""
+info "--- Pre-deploy: ServiceAccounts ---"
+
+if [ -f "$COMPONENTS/kyverno/service-accounts.yaml" ]; then
+  kubectl apply -f "$COMPONENTS/kyverno/service-accounts.yaml" 2>&1 | tail -1
+  ok "Dedicated ServiceAccounts created"
 fi
 
 # === Deploy ===
@@ -177,14 +186,9 @@ for f in "$COMPONENTS/cilium/default-deny.yaml" \
   fi
 done
 
-# === Post-deploy: RBAC (ServiceAccounts + policies) ===
+# === Post-deploy: RBAC policies ===
 echo ""
 info "--- Post-deploy: RBAC ---"
-
-if [ -f "$COMPONENTS/kyverno/service-accounts.yaml" ]; then
-  kubectl apply -f "$COMPONENTS/kyverno/service-accounts.yaml" 2>&1 | tail -1
-  ok "Dedicated ServiceAccounts created"
-fi
 
 if [ -f "$COMPONENTS/kyverno/rbac-policies.yaml" ]; then
   kubectl apply -f "$COMPONENTS/kyverno/rbac-policies.yaml" 2>&1 | tail -1

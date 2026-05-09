@@ -59,7 +59,7 @@ spec:
                   key: password
                   optional: true
             - name: OIDC_ISSUER
-              value: "https://id.slamstack.internal/oauth2/openid/headscale"
+              value: "https://kanidm.identity.svc.cluster.local/oauth2/openid/slam-stack-web"
             - name: OIDC_CLIENT_ID
               value: "slam-stack-web"
             - name: OIDC_CLIENT_SECRET
@@ -114,46 +114,3 @@ spec:
     - name: http
       port: 8080
       targetPort: 8080
----
-# Allow ingress from Headscale/Cilium only
-apiVersion: cilium.io/v2
-kind: CiliumNetworkPolicy
-metadata:
-  name: allow-to-slam-stack-web
-  namespace: web
-spec:
-  endpointSelector:
-    matchLabels:
-      app: slam-stack-web
-  ingress:
-    - fromEndpoints:
-        - matchLabels:
-            "k8s:io.kubernetes.pod.namespace": network
-      toPorts:
-        - ports:
-            - port: "8080"
-              protocol: TCP
-  egress:
-    - toEndpoints:
-        - matchLabels:
-            "k8s:io.kubernetes.pod.namespace": identity
-      toPorts:
-        - ports:
-            - port: "443"
-              protocol: TCP
-    - toEndpoints:
-        - matchLabels:
-            "k8s:io.kubernetes.pod.namespace": vault
-      toPorts:
-        - ports:
-            - port: "8200"
-              protocol: TCP
-    # DNS
-    - toEndpoints:
-        - matchLabels:
-            "k8s:io.kubernetes.pod.namespace": kube-system
-            k8s-app: kube-dns
-      toPorts:
-        - ports:
-            - port: "53"
-              protocol: UDP

@@ -20,8 +20,11 @@ securityContext:
     type: RuntimeDefault
 
 config:
-  # Enable resource reporting
-  resourceFilters: "[*,*,*]"
+  # Exclude only system namespaces from background scanning
+  resourceFilters: >-
+    [{"namespace":"kyverno","kind":"*","name":"*"},
+     {"namespace":"kube-system","kind":"*","name":"*"},
+     {"namespace":"cert-manager","kind":"*","name":"*"}]
   # Exclude system namespaces from webhook (they're pre-approved)
   webhooks:
     - namespaceSelector:

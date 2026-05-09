@@ -253,6 +253,85 @@ spec:
             - port: "8480"
               protocol: TCP
 ---
+# === Allow traffic to VictoriaMetrics (metrics + alerting) ===
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-to-victoria-metrics
+  namespace: observability
+spec:
+  endpointSelector:
+    matchLabels:
+      app: victoria-metrics
+  ingress:
+    # Scrape targets (self-monitoring)
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": observability
+      toPorts:
+        - ports:
+            - port: "8428"
+              protocol: TCP
+  egress:
+    # Scrape kube-system (Cilium, Tetragon, kubelet)
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": kube-system
+      toPorts:
+        - ports:
+            - port: "10250"
+              protocol: TCP
+            - port: "9091"
+              protocol: TCP
+            - port: "9965"
+              protocol: TCP
+    # Scrape self
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": observability
+      toPorts:
+        - ports:
+            - port: "8428"
+              protocol: TCP
+    # DNS
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+---
+# === Backup CronJob ===
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-backup-egress
+  namespace: backup
+spec:
+  endpointSelector:
+    matchLabels: {}
+  egress:
+    # Upload backups to RustFS
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": storage
+            app: rustfs
+      toPorts:
+        - ports:
+            - port: "9000"
+              protocol: TCP
+    # DNS
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+---
 # === Allow traffic to RustFS (object storage) ===
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
@@ -324,8 +403,6 @@ spec:
               protocol: TCP
             - port: "465"
               protocol: TCP
-            - port: "993"
-              protocol: TCP
   egress:
     - toEndpoints:
         - matchLabels:
@@ -371,9 +448,10 @@ spec:
     matchLabels:
       app: headscale
   ingress:
-    # Headscale receives DERP traffic and coordination
+    # Headscale receives coordination from mesh nodes only
     - fromEndpoints:
-        - matchLabels: {}
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": network
       toPorts:
         - ports:
             - port: "443"

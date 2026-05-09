@@ -357,6 +357,17 @@ fn server_err(e: impl std::fmt::Display) -> ServerFnError {
     ServerFnError::ServerError(e.to_string())
 }
 
+const VALID_SEVERITIES: &[&str] = &["Critical", "High", "Medium", "Low"];
+const VALID_STATUSES: &[&str] = &["Open", "Investigating", "Contained", "Resolved"];
+const MAX_FIELD_LEN: usize = 4096;
+
+fn validate_incident_id(id: &str) -> Result<(), ServerFnError> {
+    if id.is_empty() || id.len() > 64 || !id.chars().all(|c| c.is_alphanumeric() || c == ':' || c == '_' || c == '-') {
+        return Err(ServerFnError::ServerError("Invalid incident ID".into()));
+    }
+    Ok(())
+}
+
 #[server]
 pub async fn get_incidents() -> Result<Vec<Incident>, ServerFnError> {
     let db = crate::state::get();
@@ -378,6 +389,16 @@ pub async fn create_incident(
     description: String,
     severity: String,
 ) -> Result<(), ServerFnError> {
+    if title.trim().is_empty() || title.len() > MAX_FIELD_LEN {
+        return Err(ServerFnError::ServerError("Title must be 1-4096 chars".into()));
+    }
+    if description.len() > MAX_FIELD_LEN {
+        return Err(ServerFnError::ServerError("Description too long".into()));
+    }
+    if !VALID_SEVERITIES.contains(&severity.as_str()) {
+        return Err(ServerFnError::ServerError("Invalid severity".into()));
+    }
+
     let db = crate::state::get();
     let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
     let data = serde_json::json!({
@@ -400,6 +421,11 @@ pub async fn update_incident_status(
     id: String,
     status: String,
 ) -> Result<(), ServerFnError> {
+    validate_incident_id(&id)?;
+    if !VALID_STATUSES.contains(&status.as_str()) {
+        return Err(ServerFnError::ServerError("Invalid status".into()));
+    }
+
     let db = crate::state::get();
     let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
     db.query("UPDATE type::thing($id) SET status = $status, updated_at = $now")
@@ -413,6 +439,8 @@ pub async fn update_incident_status(
 
 #[server]
 pub async fn delete_incident(id: String) -> Result<(), ServerFnError> {
+    validate_incident_id(&id)?;
+
     let db = crate::state::get();
     db.query("DELETE type::thing($id)")
         .bind(("id", format!("incident:{id}")))
