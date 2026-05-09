@@ -1,0 +1,135 @@
+# Slam Stack — TLS Certificates (managed by cert-manager + Vault PKI)
+# Auto-rotated 7 days before 30-day expiry
+# Apply AFTER vault-issuer.yaml and Vault PKI is configured
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: kanidm-tls
+  namespace: identity
+spec:
+  secretName: kanidm-tls
+  duration: 720h
+  renewBefore: 168h
+  issuerRef:
+    name: vault-pki-issuer
+    kind: ClusterIssuer
+  dnsNames:
+    - kanidm.identity
+    - kanidm.identity.svc.cluster.local
+    - id.slamstack.internal
+  usages:
+    - server auth
+    - client auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: stalwart-tls
+  namespace: mail
+spec:
+  secretName: stalwart-tls
+  duration: 720h
+  renewBefore: 168h
+  issuerRef:
+    name: vault-pki-issuer
+    kind: ClusterIssuer
+  dnsNames:
+    - stalwart.mail
+    - stalwart.mail.svc.cluster.local
+    - mail.slamstack.internal
+  usages:
+    - server auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: rustfs-tls
+  namespace: storage
+spec:
+  secretName: rustfs-tls
+  duration: 720h
+  renewBefore: 168h
+  issuerRef:
+    name: vault-pki-issuer
+    kind: ClusterIssuer
+  dnsNames:
+    - rustfs.storage
+    - rustfs.storage.svc.cluster.local
+  usages:
+    - server auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: surrealdb-tls
+  namespace: database
+spec:
+  secretName: surrealdb-tls
+  duration: 720h
+  renewBefore: 168h
+  issuerRef:
+    name: vault-pki-issuer
+    kind: ClusterIssuer
+  dnsNames:
+    - surrealdb.database
+    - surrealdb.database.svc.cluster.local
+    - db.slamstack.internal
+  usages:
+    - server auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: headscale-tls
+  namespace: network
+spec:
+  secretName: headscale-tls
+  duration: 720h
+  renewBefore: 168h
+  issuerRef:
+    name: vault-pki-issuer
+    kind: ClusterIssuer
+  dnsNames:
+    - headscale.network
+    - headscale.network.svc.cluster.local
+    - vpn.slamstack.internal
+  usages:
+    - server auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: web-tls
+  namespace: web
+spec:
+  secretName: web-tls
+  duration: 720h
+  renewBefore: 168h
+  issuerRef:
+    name: vault-pki-issuer
+    kind: ClusterIssuer
+  dnsNames:
+    - slam-stack-web.web
+    - slam-stack-web.web.svc.cluster.local
+    - slam.slamstack.internal
+  usages:
+    - server auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256

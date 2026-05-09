@@ -222,3 +222,12 @@ pub struct NewIncident {
     pub description: String,
     pub severity: IncidentSeverity,
 }
+
+// === Authentication (OIDC) ===
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserIdentity {
+    pub subject: String,
+    pub email: String,
+    pub name: String,
+}

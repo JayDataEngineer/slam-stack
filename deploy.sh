@@ -26,6 +26,7 @@ declare -A HELM_REPOS=(
   ["gabe565"]="https://charts.gabe565.com"
   ["surrealdb"]="https://helm.surrealdb.com"
   ["openebs"]="https://openebs.github.io/charts"
+  ["jetstack"]="https://charts.jetstack.io"
 )
 
 info "Adding Helm repositories..."
@@ -41,8 +42,10 @@ declare -A DEPLOY=(
   ["cilium"]="helm|cilium|cilium/cilium|kube-system|${COMPONENTS}/cilium/install.yaml"
   ["kyverno"]="helm|kyverno|kyverno/kyverno|kyverno|${COMPONENTS}/kyverno/install.yaml"
   ["tetragon"]="helm|tetragon|tetragon/tetragon|kube-system|${COMPONENTS}/tetragon/install.yaml"
-  ["victoria-logs"]="helm|victoria-logs|victoria-logs-single|observability|${COMPONENTS}/victoria-logs/install.yaml"
+  ["victoria-logs"]="helm|victoria-logs|vm/victoria-logs-single|observability|${COMPONENTS}/victoria-logs/install.yaml"
+  ["victoria-metrics"]="helm|victoria-metrics|vm/victoria-metrics-single|observability|${COMPONENTS}/victoria-metrics/install.yaml"
   ["vault"]="helm|vault|openbao/openbao|vault|${COMPONENTS}/vault/install.yaml"
+  ["cert-manager"]="helm|cert-manager|jetstack/cert-manager|cert-manager|${COMPONENTS}/cert-manager/install.yaml"
   ["headscale"]="helm|headscale|gabe565/headscale|network|${COMPONENTS}/headscale/install.yaml"
   ["surrealdb"]="helm|surrealdb|surrealdb/surrealdb|database|${COMPONENTS}/surreal-db/install.yaml"
   ["mayastor"]="helm|openebs|openebs/mayastor|storage|${COMPONENTS}/mayastor/install.yaml"
@@ -52,9 +55,10 @@ declare -A DEPLOY=(
   ["rustfs"]="raw|rustfs||storage|${COMPONENTS}/rustfs/install.yaml"
   ["simplex"]="raw|simplex||comms|${COMPONENTS}/simplex/install.yaml"
   ["web"]="raw|web||web|${SCRIPT_DIR}/web/deploy.yaml"
+  ["backup"]="raw|backup||backup|${COMPONENTS}/backup/install.yaml"
 )
 
-ORDER=(kyverno tetragon victoria-logs vault mayastor registry kanidm headscale surrealdb stalwart rustfs simplex web)
+ORDER=(kyverno tetragon victoria-logs victoria-metrics vault cert-manager mayastor registry kanidm headscale surrealdb stalwart rustfs simplex web backup)
 
 # === Cosign key management ===
 COSIGN_DIR="${SCRIPT_DIR}/components/cosign"
@@ -173,6 +177,58 @@ for f in "$COMPONENTS/cilium/default-deny.yaml" \
   fi
 done
 
+# === Post-deploy: RBAC (ServiceAccounts + policies) ===
+echo ""
+info "--- Post-deploy: RBAC ---"
+
+if [ -f "$COMPONENTS/kyverno/service-accounts.yaml" ]; then
+  kubectl apply -f "$COMPONENTS/kyverno/service-accounts.yaml" 2>&1 | tail -1
+  ok "Dedicated ServiceAccounts created"
+fi
+
+if [ -f "$COMPONENTS/kyverno/rbac-policies.yaml" ]; then
+  kubectl apply -f "$COMPONENTS/kyverno/rbac-policies.yaml" 2>&1 | tail -1
+  ok "RBAC policies enforced (no default SA, no automounted tokens)"
+fi
+
+# === Post-deploy: cert-manager Vault issuer + certificates ===
+echo ""
+info "--- Post-deploy: TLS Certificates ---"
+
+if [ -f "$COMPONENTS/cert-manager/vault-issuer.yaml" ]; then
+  kubectl apply -f "$COMPONENTS/cert-manager/vault-issuer.yaml" 2>&1 | tail -1
+  ok "Vault ClusterIssuer configured"
+fi
+
+if [ -f "$COMPONENTS/cert-manager/certificates.yaml" ]; then
+  kubectl apply -f "$COMPONENTS/cert-manager/certificates.yaml" 2>&1 | tail -1
+  ok "Certificate CRDs created (auto-issued by cert-manager)"
+fi
+
+# === Post-deploy: VictoriaMetrics alerting ===
+echo ""
+info "--- Post-deploy: Metrics & Alerting ---"
+
+if [ -f "$COMPONENTS/victoria-metrics/alert-rules.yaml" ]; then
+  kubectl apply -f "$COMPONENTS/victoria-metrics/alert-rules.yaml" 2>&1 | tail -1
+  ok "Alert rules applied"
+fi
+
+# === Post-deploy: Kanidm OAuth2 client ===
+echo ""
+info "--- Post-deploy: OAuth2 ---"
+
+if [ -f "$COMPONENTS/kanidm/oauth2-client.yaml" ]; then
+  kubectl apply -f "$COMPONENTS/kanidm/oauth2-client.yaml" 2>&1 | tail -1
+  ok "OAuth2 client setup ConfigMap created"
+fi
+
+# === Post-deploy: Vault dynamic secrets (AppRole for cert-manager) ===
+if [ -f "$COMPONENTS/vault/dynamic-secrets.yaml" ]; then
+  kubectl apply -f "$COMPONENTS/vault/dynamic-secrets.yaml" 2>&1 | tail -1
+  ok "Vault dynamic secrets configured"
+fi
+
 echo ""
 ok "=== Slam Stack deployment complete ==="
 
@@ -201,11 +257,12 @@ fi
 echo ""
 info "Components installed:"
 helm list -A 2>/dev/null | tail -n +2 | awk '{printf "  %-20s %-15s %s\n", $1, $9, $8}'
-echo "  registry (raw)"
+echo "  backup (raw)"
 echo "  kanidm (raw)"
-echo "  stalwart (raw)"
+echo "  registry (raw)"
 echo "  rustfs (raw)"
 echo "  simplex (raw)"
+echo "  stalwart (raw)"
 echo "  web (raw)"
 echo ""
 info "Run ./verify.sh to check security posture."

@@ -102,6 +102,24 @@ pub fn get_components() -> Vec<ComponentStatus> {
             description: "Immutable audit storage",
         },
         ComponentStatus {
+            name: "VictoriaMetrics",
+            status: Status::Healthy,
+            language: "Go",
+            version: "1.110.0",
+            ram_mb: 128,
+            namespace: "observability",
+            description: "Metrics collection + alerting",
+        },
+        ComponentStatus {
+            name: "cert-manager",
+            status: Status::Healthy,
+            language: "Go",
+            version: "1.17.0",
+            ram_mb: 128,
+            namespace: "cert-manager",
+            description: "TLS automation via Vault PKI",
+        },
+        ComponentStatus {
             name: "Headscale",
             status: Status::Healthy,
             language: "Go",
@@ -280,15 +298,45 @@ pub fn get_security_findings() -> Vec<SecurityFinding> {
             layer: "Secrets",
         },
         SecurityFinding {
+            category: "TLS Automation",
+            status: FindingStatus::Pass,
+            description: "cert-manager auto-rotates certs via Vault PKI (30d, renew 7d before)",
+            layer: "Secrets",
+        },
+        SecurityFinding {
+            category: "Dashboard Auth",
+            status: FindingStatus::Pass,
+            description: "OIDC authentication via Kanidm, PKCE flow, encrypted sessions",
+            layer: "Identity",
+        },
+        SecurityFinding {
+            category: "Automated Backup",
+            status: FindingStatus::Pass,
+            description: "6-hourly encrypted etcd backups (age + cosign) to RustFS WORM",
+            layer: "Resilience",
+        },
+        SecurityFinding {
             category: "Audit Trail",
             status: FindingStatus::Pass,
             description: "VictoriaLogs WORM storage with tamper-evident signing",
             layer: "Observability",
         },
         SecurityFinding {
+            category: "Metrics & Alerting",
+            status: FindingStatus::Pass,
+            description: "VictoriaMetrics alerting on OOM, crashes, security events, cert expiry",
+            layer: "Observability",
+        },
+        SecurityFinding {
             category: "Pod Security",
             status: FindingStatus::Pass,
             description: "All pods: non-root, read-only rootfs, no priv esc",
+            layer: "Workload",
+        },
+        SecurityFinding {
+            category: "RBAC Enforcement",
+            status: FindingStatus::Pass,
+            description: "Dedicated SAs per component, no automounted tokens (Kyverno enforced)",
             layer: "Workload",
         },
         SecurityFinding {
@@ -371,4 +419,11 @@ pub async fn delete_incident(id: String) -> Result<(), ServerFnError> {
         .await
         .map_err(server_err)?;
     Ok(())
+}
+
+#[server]
+pub async fn get_current_user() -> Result<Option<crate::models::UserIdentity>, ServerFnError> {
+    let result: Result<axum::Extension<crate::models::UserIdentity>, _> =
+        leptos_axum::extract().await;
+    Ok(result.ok().map(|ext| ext.0))
 }

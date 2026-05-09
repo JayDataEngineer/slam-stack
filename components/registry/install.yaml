@@ -20,6 +20,8 @@ spec:
       labels:
         app: registry
     spec:
+      serviceAccountName: registry
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000

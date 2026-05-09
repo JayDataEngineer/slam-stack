@@ -1,0 +1,62 @@
+# Slam Stack — RBAC Enforcement Policies (Kyverno)
+# Prevents pods from using default SA or automounting SA tokens
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-service-account-tokens
+  annotations:
+    policies.kyverno.io/title: Restrict Service Account Token Auto-Mounting
+    policies.kyverno.io/category: Security
+    policies.kyverno.io/severity: high
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: deny-automount-service-account-token
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+                - Deployment
+                - StatefulSet
+                - DaemonSet
+                - Job
+                - CronJob
+      validate:
+        message: "automountServiceAccountToken must be set to false"
+        anyPattern:
+          - spec:
+              automountServiceAccountToken: false
+          - spec:
+              =(automountServiceAccountToken: false)
+              template:
+                spec:
+                  automountServiceAccountToken: false
+    - name: deny-default-service-account
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+                - Deployment
+                - StatefulSet
+                - DaemonSet
+                - Job
+                - CronJob
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kyverno
+                - cert-manager
+                - kube-system
+      validate:
+        message: "Must use a dedicated ServiceAccount, not 'default'. Create one in service-accounts.yaml."
+        pattern:
+          spec:
+            =(serviceAccountName): "!default"
+            =(template):
+              spec:
+                serviceAccountName: "!default"

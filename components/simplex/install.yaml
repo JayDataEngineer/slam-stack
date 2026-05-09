@@ -79,6 +79,8 @@ spec:
       labels:
         app: smp-server
     spec:
+      serviceAccountName: smp-server
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 10000
@@ -182,6 +184,8 @@ spec:
       labels:
         app: xftp-server
     spec:
+      serviceAccountName: xftp-server
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 10000

@@ -1,0 +1,122 @@
+# Slam Stack — Automated etcd Backup (CronJob)
+# Runs backup-verify.sh every 6 hours
+# Encrypted (age), signed (cosign), uploaded to RustFS WORM
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: backup
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backup-talos-config
+  namespace: backup
+type: Opaque
+stringData:
+  # Generated during bootstrap — replace with actual talosconfig
+  talosconfig: |
+    context: slam-stack
+    contexts:
+      slam-stack:
+        endpoints:
+          - REPLACE_WITH_NODE_IP
+        nodes:
+          - REPLACE_WITH_NODE_IP
+        auth:
+          mode: none
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backup-credentials
+  namespace: backup
+type: Opaque
+stringData:
+  # Age public key for encryption
+  age-pubkey: "REPLACE_WITH_AGE_PUBKEY"
+  # S3 config for RustFS
+  s3cfg: |
+    [default]
+    access_key = REPLACE_WITH_ACCESS_KEY
+    secret_key = REPLACE_WITH_SECRET_KEY
+    host_base = rustfs.storage.svc.cluster.local:9000
+    host_bucket = rustfs.storage.svc.cluster.local:9000
+    use_https = False
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: etcd-backup
+  namespace: backup
+spec:
+  schedule: "17 */6 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: backup-runner
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10000
+            fsGroup: 10000
+          containers:
+            - name: backup
+              image: registry.registry.svc.cluster.local:5000/slam-stack-backup:latest
+              command: ["/usr/local/bin/backup.sh"]
+              env:
+                - name: TALOSCONFIG
+                  value: /etc/talos/talosconfig
+                - name: BACKUP_AGE_PUBKEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: backup-credentials
+                      key: age-pubkey
+                - name: HOME
+                  value: /tmp
+              volumeMounts:
+                - name: talos-config
+                  mountPath: /etc/talos
+                  readOnly: true
+                - name: cosign
+                  mountPath: /etc/cosign
+                  readOnly: true
+                - name: s3cfg
+                  mountPath: /tmp/.s3cfg
+                  subPath: s3cfg
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+                seccompProfile:
+                  type: RuntimeDefault
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
+          volumes:
+            - name: talos-config
+              secret:
+                secretName: backup-talos-config
+            - name: cosign
+              secret:
+                secretName: cosign-keys
+            - name: s3cfg
+              secret:
+                secretName: backup-credentials
+            - name: tmp
+              emptyDir:
+                medium: Memory
+                sizeLimit: 256Mi
+          restartPolicy: OnFailure

@@ -1,0 +1,82 @@
+# Slam Stack — Kanidm OAuth2 Client Registration
+# Register OAuth2 clients for web dashboard and Stalwart mail
+# Run these commands after Kanidm is deployed and the admin account is set up
+#
+# Prerequisites:
+#   kubectl exec -n identity kanidm-0 -- kanidm login -D admin
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kanidm-oauth2-setup
+  namespace: identity
+data:
+  # Web Dashboard OAuth2 client
+  01-create-web-client.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    echo "=== Creating OAuth2 client for Web Dashboard ==="
+    kubectl exec -n identity kanidm-0 -- \
+      kanidm system oauth2 create \
+        --displayname "SLAM Stack Dashboard" \
+        --origin "https://slamstack.internal" \
+        --redirect-url "https://slamstack.internal/auth/callback" \
+        slam-stack-web
+    echo ""
+    echo "Getting client secret..."
+    WEB_SECRET=$(kubectl exec -n identity kanidm-0 -- \
+      kanidm system oauth2 show-basic-secret slam-stack-web 2>/dev/null | tail -1)
+    echo ""
+    echo "Creating K8s secret for web dashboard..."
+    kubectl create secret generic web-oidc-credentials \
+      -n web \
+      --from-literal=client-secret="$WEB_SECRET" \
+      --from-literal=session-secret="$(openssl rand -base64 32 | tr -d '\n')"
+
+    echo "Enabling scopes for web dashboard..."
+    kubectl exec -n identity kanidm-0 -- \
+      kanidm system oauth2 update-scope-map \
+        slam-stack-web \
+        --name openid --name profile --name email \
+        idm_all_persons
+    ok "Web dashboard OAuth2 client configured"
+
+  # Stalwart Mail OAuth2 client
+  02-create-stalwart-client.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    echo "=== Creating OAuth2 client for Stalwart Mail ==="
+    kubectl exec -n identity kanidm-0 -- \
+      kanidm system oauth2 create \
+        --displayname "Stalwart Mail Server" \
+        --origin "https://mail.slamstack.internal" \
+        stalwart
+    echo ""
+    echo "Getting client secret..."
+    STALWART_SECRET=$(kubectl exec -n identity kanidm-0 -- \
+      kanidm system oauth2 show-basic-secret stalwart 2>/dev/null | tail -1)
+    echo ""
+    echo "Creating K8s secret for Stalwart..."
+    kubectl create secret generic stalwart-oidc \
+      -n mail \
+      --from-literal=client-secret="$STALWART_SECRET" \
+      --dry-run=client -o yaml | kubectl apply -f -
+
+    echo "Enabling scopes for Stalwart..."
+    kubectl exec -n identity kanidm-0 -- \
+      kanidm system oauth2 update-scope-map \
+        stalwart \
+        --name openid --name profile --name email \
+        idm_all_persons
+    echo "Stalwart OAuth2 client configured."
+
+  # Run all setup
+  setup-all.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    echo "=== Setting up all OAuth2 clients ==="
+    bash /data/01-create-web-client.sh
+    echo ""
+    bash /data/02-create-stalwart-client.sh
+    echo ""
+    echo "=== OAuth2 setup complete ==="

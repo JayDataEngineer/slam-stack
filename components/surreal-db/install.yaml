@@ -48,6 +48,11 @@ service:
   ports:
     surrealdb: 8000
 
+# === Dedicated ServiceAccount (created in kyverno/service-accounts.yaml) ===
+serviceAccount:
+  create: false
+  name: surrealdb
+
 # === Security context ===
 podSecurityContext:
   runAsNonRoot: true

@@ -40,6 +40,11 @@ config:
     server:
       enabled: false
 
+# Dedicated ServiceAccount (created in kyverno/service-accounts.yaml)
+serviceAccount:
+  create: false
+  name: headscale
+
 # Security context
 podSecurityContext:
   runAsNonRoot: true

@@ -15,6 +15,7 @@ pub fn App() -> impl IntoView {
                 <main class="main-content">
                     <Routes fallback=|| view! { <div class="loading"><h1>"Not Found"</h1></div> }>
                         <Route path=StaticSegment("/") view=pages::dashboard::DashboardPage/>
+                        <Route path=StaticSegment("/login") view=pages::login::LoginPage/>
                         <Route path=StaticSegment("/security") view=pages::security::SecurityPage/>
                         <Route path=StaticSegment("/logs") view=pages::logs::LogsPage/>
                         <Route path=StaticSegment("/incidents") view=pages::incidents::IncidentsPage/>
@@ -28,6 +29,9 @@ pub fn App() -> impl IntoView {
 #[component]
 fn Sidebar() -> impl IntoView {
     let location = leptos_router::hooks::use_location();
+    let user_action = Action::new(|_: &()| crate::server::get_current_user());
+    user_action.dispatch(());
+    let user_result = user_action.value();
 
     let is_active = move |path: &str| {
         let current = location.pathname.get();
@@ -86,7 +90,15 @@ fn Sidebar() -> impl IntoView {
                 </a>
             </nav>
             <div class="sidebar-footer">
-                "v0.2.0 · Rust/WASM"
+                {move || match user_result.get() {
+                    Some(Ok(Some(user))) => view! {
+                        <>
+                            <span class="user-name">{user.name}</span>
+                            " · v0.2.0"
+                        </>
+                    }.into_any(),
+                    _ => view! { <span>"v0.2.0 · Rust/WASM"</span> }.into_any(),
+                }}
             </div>
         </aside>
     }

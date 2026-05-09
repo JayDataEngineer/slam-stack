@@ -21,16 +21,6 @@ spec:
       storage: 10Gi
 ---
 apiVersion: v1
-kind: Secret
-metadata:
-  name: kanidm-tls
-  namespace: identity
-type: kubernetes.io/tls
-stringData:
-  tls.crt: ""  # Set via Vault PKI or cert-manager
-  tls.key: ""
----
-apiVersion: v1
 kind: ConfigMap
 metadata:
   name: kanidm-config
@@ -103,6 +93,8 @@ spec:
       labels:
         app: kanidm
     spec:
+      serviceAccountName: kanidm
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 10000

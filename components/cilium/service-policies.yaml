@@ -274,7 +274,7 @@ spec:
               protocol: TCP
     - fromEndpoints:
         - matchLabels:
-            "k8s:io.kubernetes.pod.namespace": default  # Backup scripts
+            "k8s:io.kubernetes.pod.namespace": backup  # Backup CronJob
       toPorts:
         - ports:
             - port: "9000"
@@ -350,6 +350,15 @@ spec:
         - ports:
             - port: "8200"
               protocol: TCP
+    # DNS (required for DNSBL spam filtering and outbound MX lookups)
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
 ---
 # === Headscale mesh VPN ===
 apiVersion: cilium.io/v2
@@ -394,16 +403,15 @@ apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
   name: allow-to-registry
-  namespace: default
+  namespace: registry
 spec:
   endpointSelector:
     matchLabels:
       app: registry
   ingress:
     # Only kube-system can pull images (kubelet)
-    - fromEndpoints:
-        - matchLabels:
-            "k8s:io.kubernetes.pod.namespace": kube-system
+    - fromEntities:
+        - cluster
       toPorts:
         - ports:
             - port: "5000"
@@ -425,6 +433,15 @@ spec:
         - ports:
             - port: "8480"
               protocol: TCP
+    # DNS
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
 ---
 # === Web Dashboard ===
 apiVersion: cilium.io/v2
@@ -435,14 +452,14 @@ metadata:
 spec:
   endpointSelector:
     matchLabels:
-      app: web-dashboard
+      app: slam-stack-web
   ingress:
     - fromEndpoints:
         - matchLabels:
             "k8s:io.kubernetes.pod.namespace": network  # Headscale
       toPorts:
         - ports:
-            - port: "3000"
+            - port: "8080"
               protocol: TCP
   egress:
     - toEndpoints:
@@ -468,6 +485,15 @@ spec:
         - ports:
             - port: "8000"
               protocol: TCP
+    # DNS
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
 ---
 # === SimpleX SMP server (secure messaging relay) ===
 apiVersion: cilium.io/v2

@@ -24,6 +24,8 @@ spec:
       labels:
         app: rustfs
     spec:
+      serviceAccountName: rustfs
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 10000

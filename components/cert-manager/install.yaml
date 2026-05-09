@@ -1,0 +1,71 @@
+# Slam Stack — cert-manager (TLS Automation)
+# Issues certs via Vault PKI, auto-rotates before expiry
+# Install: helm repo add jetstack https://charts.jetstack.io && helm upgrade --install cert-manager jetstack/cert-manager -n cert-manager -f install.yaml
+---
+installCRDs: true
+replicaCount: 1
+
+# Disable name validation for service accounts
+serviceAccount:
+  create: true
+  automountServiceAccountToken: true
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10000
+  fsGroup: 10000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+  seccompProfile:
+    type: RuntimeDefault
+
+webhook:
+  securityContext:
+    runAsNonRoot: true
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
+    seccompProfile:
+      type: RuntimeDefault
+
+cainjector:
+  securityContext:
+    runAsNonRoot: true
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
+    seccompProfile:
+      type: RuntimeDefault
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+webhook:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+
+cainjector:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+
+extraArgs:
+  - --cluster-signing-size=2048

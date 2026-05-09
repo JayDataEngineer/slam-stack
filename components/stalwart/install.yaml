@@ -23,12 +23,28 @@ spec:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: stalwart-tls
+  name: stalwart-oidc
   namespace: mail
-type: kubernetes.io/tls
+type: Opaque
 stringData:
-  tls.crt: ""
-  tls.key: ""
+  # Create via: kubectl create secret generic stalwart-oidc
+  #   -n mail --from-literal=client-secret=<FROM_KANIDM>
+  # See: components/kanidm/oauth2-client.yaml
+  client-secret: "REPLACE-ME-BEFORE-DEPLOY"
+---
+# DKIM signing key — generate with:
+#   openssl genrsa -out dkim-private.pem 2048
+#   openssl rsa -in dkim-private.pem -pubout -out dkim-public.pem
+# Then: kubectl create secret generic stalwart-dkim
+#   -n mail --from-file=private.pem=dkim-private.pem
+apiVersion: v1
+kind: Secret
+metadata:
+  name: stalwart-dkim
+  namespace: mail
+type: Opaque
+stringData:
+  private.pem: "REPLACE-ME-BEFORE-DEPLOY"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -57,12 +73,23 @@ data:
     certificate = "/etc/stalwart/tls/tls.crt"
     private-key = "/etc/stalwart/tls/tls.key"
 
-    [oidc]
+    [authentication]
+    # OIDC via Kanidm — users authenticate with WebAuthn passkeys
+    [authentication.oauth2]
     enabled = true
-    provider = "kanidm"
-    issuer = "https://kanidm.identity:443/oauth2"
+    issuer = "https://kanidm.identity.svc.cluster.local/oauth2/openid/stalwart"
     client-id = "stalwart"
-    # client-secret injected by Vault
+    client-secret = "${OIDC_CLIENT_SECRET}"
+    scopes = ["openid", "profile", "email"]
+
+    # DKIM signing for outbound mail
+    [signature]
+    algorithm = "rsa-sha256"
+    canonicalization = "relaxed/relaxed"
+    header-fields = ["From", "To", "Date", "Subject", "Message-ID"]
+    private-key = "/etc/stalwart/dkim/private.pem"
+    selector = "slam"
+    domain = "slamstack.internal"
 
     [storage]
     type = "filesystem"
@@ -80,9 +107,22 @@ data:
     enabled = true
     zones = ["zen.spamhaus.org", "bl.spamcop.net"]
 
+    # Rate limiting — prevent abuse
+    [rate-limit]
+    # Inbound: 100 messages per hour per connection
+    in = 100
+    in-period = "1h"
+    # Outbound: 200 messages per hour
+    out = 200
+    out-period = "1h"
+
     [audit]
     enabled = true
     remote = "tcp://victoria-logs-audit.observability:8480"
+
+    [tracer]
+    enabled = true
+    endpoint = "victoria-logs-audit.observability:8480"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -99,6 +139,8 @@ spec:
       labels:
         app: stalwart
     spec:
+      serviceAccountName: stalwart
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 10000
@@ -109,6 +151,12 @@ spec:
           args:
             - --config
             - /etc/stalwart/config.toml
+          env:
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: stalwart-oidc
+                  key: client-secret
           ports:
             - containerPort: 443
               name: jmap
@@ -122,6 +170,9 @@ spec:
               subPath: config.toml
             - name: tls
               mountPath: /etc/stalwart/tls
+              readOnly: true
+            - name: dkim
+              mountPath: /etc/stalwart/dkim
               readOnly: true
           securityContext:
             allowPrivilegeEscalation: false
@@ -161,6 +212,9 @@ spec:
         - name: tls
           secret:
             secretName: stalwart-tls
+        - name: dkim
+          secret:
+            secretName: stalwart-dkim
 ---
 apiVersion: v1
 kind: Service
