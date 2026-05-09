@@ -10,39 +10,57 @@ fail()  { echo -e "${RED}[-]${NC} $1"; exit 1; }
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PATCH_DIR="${SCRIPT_DIR}/patches"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 ARCH=$(uname -m)
 case "$ARCH" in x86_64) ARCH="amd64" ;; aarch64) ARCH="arm64" ;; *) fail "unsupported arch: $ARCH" ;; esac
-TALOS_VERSION="v1.13.0"
-TALOSCTL="talosctl"
 
-# Check for k3s on host (conflicts with Talos LB on port 6443)
+# === Version pins ===
+TALOS_VERSION="v1.13.0"
+KUBECTL_VERSION="v1.32.0"
+HELM_VERSION="3.17.0"
+COSIGN_VERSION="v2.4.1"
+TALOSCTL="${PROJECT_DIR}/_out/talosctl"
+
+mkdir -p "${PROJECT_DIR}/_out"
+
+# Check for k3s on host
 if systemctl is-active --quiet k3s 2>/dev/null; then
   info "Stopping host k3s service (conflicts with Talos load balancer)..."
   sudo systemctl disable --now k3s.service
 fi
 
 # === Install talosctl ===
-if ! command -v talosctl &>/dev/null; then
-  info "Installing talosctl..."
-  curl -sL "https://github.com/siderolabs/talos/releases/latest/download/talosctl-$(uname -s | tr '[:upper:]' '[:lower:]')-${ARCH}" -o /tmp/talosctl
-  sudo mv /tmp/talosctl /usr/local/bin/talosctl && sudo chmod +x /usr/local/bin/talosctl
-  ok "talosctl installed: $(talosctl version --client 2>/dev/null | head -1)"
+if ! command -v talosctl &>/dev/null && [ ! -f "$TALOSCTL" ]; then
+  info "Installing talosctl ${TALOS_VERSION}..."
+  curl -sSL --retry 3 "https://github.com/siderolabs/talos/releases/download/${TALOS_VERSION}/talosctl-linux-${ARCH}" -o "$TALOSCTL"
+  chmod +x "$TALOSCTL"
+  sudo cp "$TALOSCTL" /usr/local/bin/talosctl
+  ok "talosctl installed: $TALOS_VERSION"
 fi
 
 # === Install kubectl ===
 if ! command -v kubectl &>/dev/null; then
-  info "Installing kubectl..."
-  curl -sLO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/${ARCH}/kubectl"
-  chmod +x kubectl && sudo mv kubectl /usr/local/bin/
-  ok "kubectl installed"
+  info "Installing kubectl ${KUBECTL_VERSION}..."
+  curl -sSL --retry 3 "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl" -o /tmp/kubectl
+  chmod +x /tmp/kubectl && sudo mv /tmp/kubectl /usr/local/bin/kubectl
+  ok "kubectl installed: ${KUBECTL_VERSION}"
 fi
 
 # === Install Helm ===
 if ! command -v helm &>/dev/null; then
-  info "Installing Helm..."
-  curl -sL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-  ok "helm installed"
+  info "Installing Helm ${HELM_VERSION}..."
+  curl -sL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-${ARCH}.tar.gz" | tar xz -C /tmp/
+  sudo mv "/tmp/linux-${ARCH}/helm" /usr/local/bin/helm
+  ok "helm installed: ${HELM_VERSION}"
+fi
+
+# === Install Cosign ===
+if ! command -v cosign &>/dev/null; then
+  info "Installing Cosign ${COSIGN_VERSION}..."
+  curl -sSL --retry 3 "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-${ARCH}" -o /tmp/cosign
+  chmod +x /tmp/cosign && sudo mv /tmp/cosign /usr/local/bin/cosign
+  ok "cosign installed: ${COSIGN_VERSION}"
 fi
 
 # === Check QEMU ===
@@ -54,9 +72,8 @@ if ! command -v qemu-system-x86_64 &>/dev/null; then
 fi
 
 # === Download Talos kernel/initramfs ===
-info "Downloading Talos kernel/initramfs..."
+info "Downloading Talos kernel/initramfs for ${TALOS_VERSION}..."
 sudo mkdir -p /root/_out
-SUDO_HOME=$(sudo bash -c 'echo $HOME')
 GH_BASE="https://github.com/siderolabs/talos/releases/download/${TALOS_VERSION}"
 sudo curl -sL -o /root/_out/vmlinuz-${ARCH} "${GH_BASE}/vmlinuz-${ARCH}"
 sudo curl -sL -o /root/_out/initramfs-${ARCH}.xz "${GH_BASE}/initramfs-${ARCH}.xz"
@@ -72,7 +89,6 @@ sudo rm -rf /root/.talos/clusters/slam-stack-dev
 # === Create dev cluster with hardening ===
 info "Creating Slam Stack dev cluster (1 controlplane)..."
 
-# Use the dev subcommand if available (Talos >= 1.13)
 CREATE_CMD="cluster create"
 if talosctl cluster create dev --help &>/dev/null 2>&1; then
   CREATE_CMD="cluster create dev"
@@ -96,17 +112,16 @@ ${TALOSCTL} ${CREATE_CMD} \
   --config-patch @${PATCH_DIR}/cilium.yaml
 "
 
-# === Wait for Talos health (skip k8s check, the LB SAN issue is handled below) ===
+# === Wait for Talos health ===
 info "Waiting for Talos health..."
 sudo talosctl --talosconfig /root/.talos/config --nodes 10.5.0.2 health --wait-timeout=5m --server=false
 
 # === Extract kubeconfig ===
-# The LB at 10.5.0.1:6443 terminates TLS, so we connect directly to the VM
 info "Extracting kubeconfig..."
 mkdir -p ~/.kube
 sudo talosctl --talosconfig /root/.talos/config --nodes 10.5.0.2 kubeconfig /tmp/slam-kubeconfig --merge=false
 
-# Fix the kubeconfig: use server cert as CA & connect directly to VM (bypasses LB TLS issues)
+# Fix: use server cert as CA & connect directly to VM
 SERVER_CA=\$(echo | timeout 5 openssl s_client -connect 10.5.0.2:6443 -showcerts 2>/dev/null | timeout 5 openssl x509 2>/dev/null | base64 | tr -d '\n')
 sudo python3 -c \"
 import yaml
@@ -114,16 +129,16 @@ with open('/tmp/slam-kubeconfig') as f:
     d = yaml.safe_load(f)
 d['clusters'][0]['cluster']['certificate-authority-data'] = '\${SERVER_CA}'
 d['clusters'][0]['cluster']['server'] = 'https://10.5.0.2:6443'
-with open('${HOME}/.kube/slam-stack-config', 'w') as f:
+with open('\${HOME}/.kube/slam-stack-config', 'w') as f:
     yaml.dump(d, f)
 \"
-sudo chown $(id -u):$(id -g) ~/.kube/slam-stack-config
+sudo chown \$(id -u):\$(id -g) ~/.kube/slam-stack-config
 ok "Kubeconfig: ~/.kube/slam-stack-config"
 
 export KUBECONFIG=~/.kube/slam-stack-config
 kubectl cluster-info 2>/dev/null | head -3
 
-# === Install Cilium (CNI, kube-proxy replacement, WireGuard) ===
+# === Install Cilium ===
 info "Installing Cilium..."
 helm upgrade --install cilium cilium/cilium \
   --version 1.16.5 \
@@ -154,4 +169,4 @@ echo ""
 echo "  export KUBECONFIG=~/.kube/slam-stack-config"
 echo "  kubectl get nodes"
 echo ""
-info "Next: ./deploy.sh --dev"
+info "Next: ./deploy.sh"

@@ -1,0 +1,39 @@
+# Mayastor — NVMe-oF storage engine via SPDK
+# See: https://mayastor.gitbook.io/
+# Requires kernel modules: nvme-tcp, nvme-rdma
+mayastor:
+  # Single replica for dev, 3+ for prod
+  replicaCount: 1
+  csi:
+    node:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: "1"
+          memory: 512Mi
+  agents:
+    core:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: "1"
+          memory: 1Gi
+  pools:
+    # Default pool on each node
+    default:
+      - node: "*"
+        type: lvm
+        device: /dev/sdb
+      # For cluster-internal storage, use:
+      # type: lvm-local
+      # device: /var/snap/mayastor/common/dm5ed55ee-89e6-11ec-80d4-1b2c1b2c1b2c
+  ioEngine:
+    resources:
+      requests:
+        hugepages-2Mi: 1Gi
+      limits:
+        hugepages-2Mi: 1Gi

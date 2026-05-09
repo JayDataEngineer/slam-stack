@@ -27,7 +27,7 @@ spec:
         fsGroup: 10000
       containers:
         - name: slam-stack-web
-          image: ghcr.io/yourorg/slam-stack-web:latest  # CHANGE ME
+          image: registry.registry.svc.cluster.local:5000/slam-stack-web:latest
           ports:
             - containerPort: 8080
               name: http

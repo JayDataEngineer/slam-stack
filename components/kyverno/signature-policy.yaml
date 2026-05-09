@@ -1,8 +1,5 @@
 # Slam Stack — Image Signature Enforcement
-# Any pod not signed by our Cosign key is REJECTED at admission.
-# Prerequisite: generate Cosign keypair and store public key as secret:
-#   cosign generate-key-pair
-#   kubectl create secret -n kyverno generic cosign-public-key --from-file=cosign.pub
+# deploy.sh injects the actual Cosign public key into this template.
 ---
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
@@ -21,8 +18,6 @@ spec:
       verifyImages:
         - image: "*"
           key: |-
-            # YOUR COSIGN PUBLIC KEY HERE
-            # Replace with: cat cosign.pub | sed 's/^/            /'
             -----BEGIN PUBLIC KEY-----
             MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQDQgAE...REPLACE_ME...
             -----END PUBLIC KEY-----

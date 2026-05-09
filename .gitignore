@@ -1,3 +1,8 @@
 web/target/
 **/target/
 *.tar
+cosign.key
+cosign.pub
+*.age
+_site/
+_out/
