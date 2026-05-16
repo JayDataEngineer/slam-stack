@@ -1,0 +1,10 @@
+# Slam Stack — OpenTofu variables
+# Copy to terraform.tfvars and fill in your values.
+
+domain      = "slam.lab"
+flavor      = "og"          # core | og | matrix
+node_ip     = "192.168.1.100"
+node_hostname = "slam-node"
+install_disk = "/dev/sda"
+git_repo_url = "https://github.com/your-org/slam-stack.git"
+git_branch   = "master"
