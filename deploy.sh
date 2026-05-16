@@ -61,7 +61,7 @@ declare -A DEPLOY=(
   ["registry"]="raw|registry||registry|${COMPONENTS}/registry/install.yaml"
   ["kanidm"]="raw|kanidm||identity|${COMPONENTS}/kanidm/install.yaml"
   ["rustfs"]="raw|rustfs||storage|${COMPONENTS}/rustfs/install.yaml"
-  ["web"]="raw|web||web|${SCRIPT_DIR}/web/deploy.yaml"
+  ["web"]="raw|web||web|${SCRIPT_DIR}/components/web/deploy.yaml"
   ["backup"]="raw|backup||backup|${COMPONENTS}/backup/install.yaml"
 )
 

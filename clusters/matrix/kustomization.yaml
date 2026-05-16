@@ -1,11 +1,13 @@
 # Slam Stack — Matrix Flavor Cluster Overlay
-# Core infra + Matrix flavor (Tuwunel, Cinny, LiveKit).
-# Point Flux bootstrap at this path for the Matrix stack.
+# Creates Flux Kustomization CRDs with layered dependsOn for ordered deployment.
+#   Phase 0–4: common core infrastructure
+#   Phase 5 (flavor): tuwunel, cinny, livekit
+#
+# Point Flux bootstrap at this path:
 #   flux bootstrap ... --path=./clusters/matrix
 ---
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../base/sources
-  - ../../components
-  - ../../flavors/matrix
+  - ../common
+  - flavor.yaml

@@ -1,11 +1,17 @@
 # Slam Stack — OG Flavor Cluster Overlay
-# Core infra + OG flavor (Stalwart email, SimpleX chat).
-# Point Flux bootstrap at this path for the OG stack.
+# Creates Flux Kustomization CRDs with layered dependsOn for ordered deployment.
+#   Phase 0 (sources): HelmRepositories
+#   Phase 1 (cni):     cilium, kyverno, tetragon
+#   Phase 2 (core):    vault, mayastor, postgres
+#   Phase 3 (infra):   cert-manager, victoria-logs/metrics, kanidm, headscale
+#   Phase 4 (services): registry, rustfs, web, backup
+#   Phase 5 (flavor):  stalwart, simplex
+#
+# Point Flux bootstrap at this path:
 #   flux bootstrap ... --path=./clusters/og
 ---
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../base/sources
-  - ../../components
-  - ../../flavors/og
+  - ../common
+  - flavor.yaml
