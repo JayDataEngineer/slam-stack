@@ -4,3 +4,4 @@ resources:
   - ../../../components/cilium
   - ../../../components/kyverno
   - ../../../components/tetragon
+  - ../../../components/kata
