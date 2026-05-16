@@ -1,0 +1,48 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: tetragon
+  namespace: kube-system
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: tetragon
+      sourceRef:
+        kind: HelmRepository
+        name: tetragon
+        namespace: flux-system
+      interval: 1h
+  values:
+    tetragon:
+      processVisibility: true
+      enablePolicyFilter: true
+      export:
+        mode: "json"
+        file:
+          enabled: false
+        tcp:
+          enabled: true
+          address: "victoria-logs-audit:8480"
+      securityContext:
+        runAsNonRoot: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          add:
+            - BPF
+            - PERFMON
+            - NET_ADMIN
+            - SYS_ADMIN
+            - SYS_PTRACE
+          drop:
+            - ALL
+        seccompProfile:
+          type: Unconfined
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 1000m
+        memory: 512Mi

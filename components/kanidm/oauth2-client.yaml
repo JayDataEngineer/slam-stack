@@ -1,6 +1,6 @@
 # Slam Stack — Kanidm OAuth2 Client Registration
-# Register OAuth2 clients for web dashboard and Stalwart mail
-# Run these commands after Kanidm is deployed and the admin account is set up
+# Register OAuth2 clients for the web dashboard.
+# Flavor-specific OAuth2 clients are in flavors/<flavor>/policies/oauth2-client.yaml.
 #
 # Prerequisites:
 #   kubectl exec -n identity kanidm-0 -- kanidm login -D admin
@@ -41,42 +41,10 @@ data:
         idm_all_persons
     ok "Web dashboard OAuth2 client configured"
 
-  # Stalwart Mail OAuth2 client
-  02-create-stalwart-client.sh: |
-    #!/bin/bash
-    set -euo pipefail
-    echo "=== Creating OAuth2 client for Stalwart Mail ==="
-    kubectl exec -n identity kanidm-0 -- \
-      kanidm system oauth2 create \
-        --displayname "Stalwart Mail Server" \
-        --origin "https://mail.slamstack.internal" \
-        stalwart
-    echo ""
-    echo "Getting client secret..."
-    STALWART_SECRET=$(kubectl exec -n identity kanidm-0 -- \
-      kanidm system oauth2 show-basic-secret stalwart 2>/dev/null | tail -1)
-    echo ""
-    echo "Creating K8s secret for Stalwart..."
-    kubectl create secret generic stalwart-oidc \
-      -n mail \
-      --from-literal=client-secret="$STALWART_SECRET" \
-      --dry-run=client -o yaml | kubectl apply -f -
-
-    echo "Enabling scopes for Stalwart..."
-    kubectl exec -n identity kanidm-0 -- \
-      kanidm system oauth2 update-scope-map \
-        stalwart \
-        --name openid --name profile --name email \
-        idm_all_persons
-    echo "Stalwart OAuth2 client configured."
-
-  # Run all setup
+  # Run core setup
   setup-all.sh: |
     #!/bin/bash
     set -euo pipefail
-    echo "=== Setting up all OAuth2 clients ==="
+    echo "=== Setting up core OAuth2 clients ==="
     bash /data/01-create-web-client.sh
-    echo ""
-    bash /data/02-create-stalwart-client.sh
-    echo ""
-    echo "=== OAuth2 setup complete ==="
+    echo "Core OAuth2 setup complete"

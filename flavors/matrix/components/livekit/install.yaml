@@ -1,0 +1,181 @@
+# Slam Stack — LiveKit Voice/Video Engine
+# E2EE SFU for Matrix voice/video channels.
+# Integrates with Tuwunel via LiveKit config on the homeserver.
+#
+# Image: ghcr.io/livekit/livekit-server
+# Ports: 7880 (API/WS), 7881 (ICE/TCP), 7882 (ICE/UDP mux)
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: livekit-config
+  namespace: matrix
+data:
+  livekit.yaml: |
+    port: 7880
+    rtc:
+      port_range_begin: 50000
+      port_range_end: 60000
+      tcp_port: 7881
+      use_external_ip: false
+    turn:
+      enabled: false
+    keys:
+      # Default dev key — replace in production. Generate with:
+      #   openssl rand -hex 32
+      devkey: "devkey-change-in-production"
+    logging:
+      level: info
+      json: false
+    redis:
+      address: livekit-redis:6379
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: livekit-redis
+  namespace: matrix
+  labels:
+    app: livekit-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: livekit-redis
+  template:
+    metadata:
+      labels:
+        app: livekit-redis
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      containers:
+        - name: redis
+          image: docker.io/redis:7-alpine
+          imagePullPolicy: IfNotPresent
+          args:
+            - redis-server
+            - --save
+            - ""
+            - --appendonly
+            - "no"
+          ports:
+            - containerPort: 6379
+              name: redis
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: livekit-redis
+  namespace: matrix
+  labels:
+    app: livekit-redis
+spec:
+  type: ClusterIP
+  ports:
+    - port: 6379
+      targetPort: 6379
+      protocol: TCP
+      name: redis
+  selector:
+    app: livekit-redis
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: livekit
+  namespace: matrix
+  labels:
+    app: livekit
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: livekit
+  template:
+    metadata:
+      labels:
+        app: livekit
+    spec:
+      serviceAccountName: livekit
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10000
+        runAsGroup: 10000
+        fsGroup: 10000
+      containers:
+        - name: livekit
+          image: ghcr.io/livekit/livekit-server:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config
+            - /etc/livekit/livekit.yaml
+          ports:
+            - containerPort: 7880
+              name: api
+              protocol: TCP
+            - containerPort: 7881
+              name: ice-tcp
+              protocol: TCP
+            - containerPort: 7882
+              name: ice-udp
+              protocol: UDP
+          volumeMounts:
+            - name: config
+              mountPath: /etc/livekit
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 7880
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 7880
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: livekit-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: livekit
+  namespace: matrix
+  labels:
+    app: livekit
+spec:
+  type: ClusterIP
+  ports:
+    - name: api
+      port: 7880
+      targetPort: 7880
+      protocol: TCP
+    - name: ice-tcp
+      port: 7881
+      targetPort: 7881
+      protocol: TCP
+  selector:
+    app: livekit

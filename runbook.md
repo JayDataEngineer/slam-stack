@@ -14,8 +14,8 @@ security posture — "slam it on a table and you're good to go."
 │  ┌────────────────────────────────────────────────────┐  │
 │  │              Kata / Cloud Hypervisor (opt)          │  │
 │  │  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────────┐  │  │
-│  │  │App A │ │App B │ │Kanidm│ │Vault │ │Stalwart  │  │  │
-│  │  │      │ │      │ │      │ │      │ │          │  │  │
+│  │  │App A │ │App B │ │Kanidm│ │Vault │ │Flavor App│  │  │
+│  │  │      │ │      │ │      │ │      │ │(OG/Matrix)│  │  │
 │  │  └──┬───┘ └──┬───┘ └──┬───┘ └──┬───┘ └────┬─────┘  │  │
 │  │     │         │        │        │          │         │  │
 │  │  ┌──┴─────────┴────────┴────────┴──────────┴──┐      │  │
@@ -85,7 +85,7 @@ For prod: enable Kata with Cloud Hypervisor via the Image Factory schematic.
 | Tool | Chart status | Decision |
 |------|-------------|----------|
 | Kanidm | No official chart | Raw K8s manifests |
-| Stalwart | No official chart | Raw K8s manifests |
+| Stalwart (OG) | No official chart | Raw K8s manifests |
 | Headscale | Community chart: gabe565/headscale | Helm |
 | OpenBao | Official chart | Helm |
 | SurrealDB | Official chart | Helm |
@@ -113,7 +113,7 @@ For prod: enable Kata with Cloud Hypervisor via the Image Factory schematic.
 | Kanidm | Rust | Identity / SSO / Passkeys | ~80MB | Raw manifests |
 | OpenBao | Go | Secrets / PKI / Dynamic creds | ~300MB | Helm |
 | SurrealDB | Rust | Multi-model database | ~300MB | Helm |
-| Stalwart | Rust | Mail server (SMTP+JMAP) | ~150MB | Raw manifests |
+| Stalwart (OG) | Rust | Mail server (SMTP+JMAP) | ~150MB | Raw manifests |
 | RustFS | Rust | S3 object storage (WORM) | ~300MB | Raw manifests |
 | VictoriaLogs | Go | Immutable audit logging | ~200MB | Helm |
 | Headscale | Go | Mesh VPN (zero inbound) | ~50MB | Helm (community) |
@@ -235,6 +235,21 @@ kubectl exec -n identity deploy/kanidm -- kanidm login --name admin
 kubectl exec -n identity deploy/kanidm -- kanidm person credential set-passkey admin
 ```
 
+**Flavor-specific Kanidm setup:**
+
+For the Matrix flavor (password + TOTP via Aegis):
+```bash
+kubectl exec -n identity deploy/kanidm -- kanidm person create <name> <display>
+kubectl exec -n identity deploy/kanidm -- kanidm person credential set-password <name>
+kubectl exec -n identity deploy/kanidm -- kanidm person credential set-totp <name>
+```
+
+For the OG flavor (passkey-only, maximum security):
+```bash
+kubectl exec -n identity deploy/kanidm -- kanidm person create <name> <display>
+kubectl exec -n identity deploy/kanidm -- kanidm person credential set-passkey <name>
+```
+
 ### 5. Sign Your Images
 ```bash
 cosign sign --key cosign.key ghcr.io/yourorg/yourapp:latest
@@ -252,12 +267,17 @@ kubectl exec -n network deploy/headscale -- headscale preauthkeys create -e 24h 
 ```
 Ingress (Headscale mesh / Cloudflare Tunnel)
   │
-  ├── Kanidm :443      (OIDC provider, passkey auth)
+  ├── Kanidm :443      (OIDC provider, passkey/TOTP auth)
   ├── Vault  :8200     (secrets, PKI, dynamic creds)
-  ├── Stalwart :443    (JMAP email)
-  ├── Stalwart :465    (SMTP)
-  ├── SurrealDB :8000  (multi-model database)
-  └── VictoriaLogs :8480 (audit log ingestion)
+  ├── VictoriaLogs :8480 (audit log ingestion)
+  │
+  └── Flavor-specific services:
+      ├── OG: Stalwart :443 (JMAP), :465 (SMTP)
+      ├── OG: SimpleX SMP :5223 (message relay)
+      ├── OG: SimpleX XFTP :443 (file relay)
+      ├── Matrix: Continuwuity :443 (Matrix homeserver)
+      ├── Matrix: Cinny :8080 (web UI)
+      └── Matrix: LiveKit :7880 (E2EE voice/video)
 
 Internal flows only (no internet):
   Tetragon ──► VictoriaLogs (audit events)

@@ -28,28 +28,6 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: stalwart-tls
-  namespace: mail
-spec:
-  secretName: stalwart-tls
-  duration: 720h
-  renewBefore: 168h
-  issuerRef:
-    name: vault-pki-issuer
-    kind: ClusterIssuer
-  dnsNames:
-    - stalwart.mail
-    - stalwart.mail.svc.cluster.local
-    - mail.slamstack.internal
-  usages:
-    - server auth
-  privateKey:
-    algorithm: ECDSA
-    size: 256
----
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
   name: rustfs-tls
   namespace: storage
 spec:
@@ -71,18 +49,18 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: surrealdb-tls
+  name: postgres-tls
   namespace: database
 spec:
-  secretName: surrealdb-tls
+  secretName: postgres-tls
   duration: 720h
   renewBefore: 168h
   issuerRef:
     name: vault-pki-issuer
     kind: ClusterIssuer
   dnsNames:
-    - surrealdb.database
-    - surrealdb.database.svc.cluster.local
+    - slam-stack-pg-rw.database
+    - slam-stack-pg-rw.database.svc.cluster.local
     - db.slamstack.internal
   usages:
     - server auth

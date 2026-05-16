@@ -1,0 +1,180 @@
+# Slam Stack — Tuwunel Matrix Homeserver (Rust)
+# Lightweight Matrix homeserver, successor to Conduit/Conduwuit.
+# Auth: password + registration tokens (no OIDC).
+# First registered user becomes admin.
+#
+# Image: ghcr.io/matrix-construct/tuwunel
+# Ports: 8008 (client API), 8448 (federation)
+# Data:  /var/lib/tuwunel
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: matrix
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tuwunel-config
+  namespace: matrix
+data:
+  tuwunel.toml: |
+    [global]
+    server_name = "slamstack.internal"
+    # Federation disabled for private invite-only deployment
+    allow_federation = false
+    allow_public_registration = false
+    registration_tokens = ["changeme-please-use-a-real-token"]
+    # Trust any reverse proxy (Cinny/Caddy/nginx)
+    trusted_servers = ["0.0.0.0/0", "::/0"]
+
+    [network]
+    # Client API port (internal, behind Cinny/Caddy reverse proxy)
+    port = 8008
+    # Federation port (disabled, but leave configured)
+    federation_port = 8448
+    # Bind all interfaces inside the pod
+    bind = "0.0.0.0"
+
+    [database]
+    # RocksDB backend — lightweight, no Postgres needed
+    backend = "rocksdb"
+    path = "/var/lib/tuwunel"
+
+    [logging]
+    level = "warn"
+    targets = ["stdout"]
+
+    [sso]
+    # SSO/OIDC not supported by Tuwunel.
+    # Use password auth + registration tokens for invite-only access.
+    enabled = false
+
+    [rageshake]
+    enabled = false
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tuwunel-data
+  namespace: matrix
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tuwunel
+  namespace: matrix
+  labels:
+    app: tuwunel
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: tuwunel
+  template:
+    metadata:
+      labels:
+        app: tuwunel
+    spec:
+      serviceAccountName: tuwunel
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10000
+        runAsGroup: 10000
+        fsGroup: 10000
+      containers:
+        - name: tuwunel
+          image: ghcr.io/matrix-construct/tuwunel:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config
+            - /etc/tuwunel/tuwunel.toml
+          ports:
+            - containerPort: 8008
+              name: client
+              protocol: TCP
+            - containerPort: 8448
+              name: federation
+              protocol: TCP
+          env:
+            - name: TUWUNEL_PASSPHRASE
+              valueFrom:
+                secretKeyRef:
+                  name: tuwunel-secrets
+                  key: passphrase
+                  optional: true
+          volumeMounts:
+            - name: config
+              mountPath: /etc/tuwunel
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/tuwunel
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /_matrix/client/versions
+              port: 8008
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /_matrix/client/versions
+              port: 8008
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: tuwunel-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: tuwunel-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tuwunel
+  namespace: matrix
+  labels:
+    app: tuwunel
+spec:
+  type: ClusterIP
+  ports:
+    - name: client
+      port: 8008
+      targetPort: 8008
+      protocol: TCP
+    - name: federation
+      port: 8448
+      targetPort: 8448
+      protocol: TCP
+  selector:
+    app: tuwunel
+---
+# Secret for registration tokens, passphrases, etc.
+# On first deploy, `kubectl create secret generic tuwunel-secrets -n matrix ...`
+# For now, registration token is in ConfigMap (dev only).
+# In production, use Vault dynamic secrets or SOPS-encrypted secret.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tuwunel-secrets
+  namespace: matrix
+type: Opaque
+stringData:
+  # See runbook.md for registration token setup
+  registration-token: "changeme"

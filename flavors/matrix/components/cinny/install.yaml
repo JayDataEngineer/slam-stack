@@ -1,0 +1,114 @@
+# Slam Stack — Cinny Web Client
+# Discord-like web UI for Matrix.
+# Points to Tuwunel homeserver via config.json.
+#
+# Image: ghcr.io/cinnyapp/cinny
+# Port:  80 (nginx static file server)
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cinny-config
+  namespace: matrix
+data:
+  config.json: |
+    {
+      "defaultHomeserver": 0,
+      "homeserverList": [
+        "https://matrix.slamstack.internal"
+      ],
+      "allowCustomHomeservers": false,
+      "forceDefaultHomeserver": true,
+      "showDetails": false,
+      "syncLimit": 20,
+      "enablePresence": false,
+      "enableEncryption": true,
+      "enableDynamicImport": true,
+      "forceJoinTabs": false,
+      "hashRouting": true,
+      "features": {
+        "feature_voice": true,
+        "feature_video": true,
+        "feature_pinning": true,
+        "feature_custom_themes": true,
+        "feature_html": true,
+        "feature_video_rooms": false,
+        "feature_element_call": true
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cinny
+  namespace: matrix
+  labels:
+    app: cinny
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cinny
+  template:
+    metadata:
+      labels:
+        app: cinny
+    spec:
+      serviceAccountName: cinny
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+      containers:
+        - name: cinny
+          image: ghcr.io/cinnyapp/cinny:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+              name: http
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /usr/share/nginx/html/config.json
+              subPath: config.json
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: cinny-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cinny
+  namespace: matrix
+  labels:
+    app: cinny
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
+  selector:
+    app: cinny

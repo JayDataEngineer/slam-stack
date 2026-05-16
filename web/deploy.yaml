@@ -40,23 +40,11 @@ spec:
               value: "/usr/local/share/slam-stack-web"
             - name: LEPTOS_OUTPUT_NAME
               value: "slam-stack-web"
-            - name: SURREALDB_URL
-              value: "http://surrealdb.database.svc.cluster.local:8000"
-            - name: SURREALDB_NS
-              value: "slamstack"
-            - name: SURREALDB_DB
-              value: "dashboard"
-            - name: SURREALDB_USER
+            - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: web-db-credentials
-                  key: username
-                  optional: true
-            - name: SURREALDB_PASS
-              valueFrom:
-                secretKeyRef:
-                  name: web-db-credentials
-                  key: password
+                  key: url
                   optional: true
             - name: OIDC_ISSUER
               value: "https://kanidm.identity.svc.cluster.local/oauth2/openid/slam-stack-web"

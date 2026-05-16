@@ -127,7 +127,7 @@ impl FindingStatus {
     }
 }
 
-// === Incidents (SurrealDB-backed CRUD) ===
+// === Incidents (PostgreSQL-backed CRUD) ===
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum IncidentSeverity {
@@ -203,7 +203,7 @@ impl IncidentStatus {
     }
 }
 
-/// Incident as stored in SurrealDB (read model)
+/// Incident as stored in PostgreSQL (read model)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Incident {
     pub id: String,

@@ -1,0 +1,11 @@
+# Slam Stack — OG Flavor Cluster Overlay
+# Core infra + OG flavor (Stalwart email, SimpleX chat).
+# Point Flux bootstrap at this path for the OG stack.
+#   flux bootstrap ... --path=./clusters/og
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base/sources
+  - ../../components
+  - ../../flavors/og

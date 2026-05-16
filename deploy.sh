@@ -13,6 +13,14 @@ fail()  { echo -e "${RED}[-]${NC} $1"; exit 1; }
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 COMPONENTS="${SCRIPT_DIR}/components"
 
+# === Flavor selection ===
+FLAVOR="${FLAVOR:-og}"
+FLAVOR_DIR="${SCRIPT_DIR}/flavors/${FLAVOR}"
+if [ ! -d "$FLAVOR_DIR" ]; then
+  fail "Unknown flavor: $FLAVOR (not found: $FLAVOR_DIR)"
+fi
+info "Flavor: $FLAVOR"
+
 command -v kubectl >/dev/null 2>&1 || fail "kubectl required"
 command -v helm    >/dev/null 2>&1 || fail "helm required"
 
@@ -24,7 +32,7 @@ declare -A HELM_REPOS=(
   ["vm"]="https://victoriametrics.github.io/helm-charts"
   ["openbao"]="https://openbao.github.io/openbao-helm"
   ["gabe565"]="https://charts.gabe565.com"
-  ["surrealdb"]="https://helm.surrealdb.com"
+  ["cnpg"]="https://cloudnative-pg.github.io/charts"
   ["openebs"]="https://openebs.github.io/charts"
   ["jetstack"]="https://charts.jetstack.io"
 )
@@ -47,18 +55,32 @@ declare -A DEPLOY=(
   ["vault"]="helm|vault|openbao/openbao|vault|${COMPONENTS}/vault/install.yaml"
   ["cert-manager"]="helm|cert-manager|jetstack/cert-manager|cert-manager|${COMPONENTS}/cert-manager/install.yaml"
   ["headscale"]="helm|headscale|gabe565/headscale|network|${COMPONENTS}/headscale/install.yaml"
-  ["surrealdb"]="helm|surrealdb|surrealdb/surrealdb|database|${COMPONENTS}/surreal-db/install.yaml"
+  ["cnpg"]="helm|cnpg|cnpg/cloudnative-pg|cnpg-system|${COMPONENTS}/postgres/operator.yaml"
+  ["postgres"]="raw|postgres||database|${COMPONENTS}/postgres/install.yaml"
   ["mayastor"]="helm|openebs|openebs/mayastor|storage|${COMPONENTS}/mayastor/install.yaml"
   ["registry"]="raw|registry||registry|${COMPONENTS}/registry/install.yaml"
   ["kanidm"]="raw|kanidm||identity|${COMPONENTS}/kanidm/install.yaml"
-  ["stalwart"]="raw|stalwart||mail|${COMPONENTS}/stalwart/install.yaml"
   ["rustfs"]="raw|rustfs||storage|${COMPONENTS}/rustfs/install.yaml"
-  ["simplex"]="raw|simplex||comms|${COMPONENTS}/simplex/install.yaml"
   ["web"]="raw|web||web|${SCRIPT_DIR}/web/deploy.yaml"
   ["backup"]="raw|backup||backup|${COMPONENTS}/backup/install.yaml"
 )
 
-ORDER=(cilium kyverno tetragon victoria-logs victoria-metrics vault cert-manager mayastor registry kanidm headscale surrealdb stalwart rustfs simplex web backup)
+ORDER=(cilium kyverno tetragon victoria-logs victoria-metrics vault cert-manager mayastor cnpg postgres registry kanidm headscale rustfs web backup)
+
+# === Flavor-specific components ===
+case "$FLAVOR" in
+  og)
+    DEPLOY["stalwart"]="raw|stalwart||mail|${FLAVOR_DIR}/components/stalwart/install.yaml"
+    DEPLOY["simplex"]="raw|simplex||comms|${FLAVOR_DIR}/components/simplex/install.yaml"
+    ORDER+=(stalwart simplex)
+    ;;
+  matrix)
+    DEPLOY["tuwunel"]="raw|tuwunel||matrix|${FLAVOR_DIR}/components/tuwunel/install.yaml"
+    DEPLOY["cinny"]="raw|cinny||matrix|${FLAVOR_DIR}/components/cinny/install.yaml"
+    DEPLOY["livekit"]="raw|livekit||matrix|${FLAVOR_DIR}/components/livekit/install.yaml"
+    ORDER+=(tuwunel cinny livekit)
+    ;;
+esac
 
 # === Cosign key management ===
 COSIGN_DIR="${SCRIPT_DIR}/components/cosign"
@@ -123,7 +145,14 @@ info "--- Pre-deploy: ServiceAccounts ---"
 
 if [ -f "$COMPONENTS/kyverno/service-accounts.yaml" ]; then
   kubectl apply -f "$COMPONENTS/kyverno/service-accounts.yaml" 2>&1 | tail -1
-  ok "Dedicated ServiceAccounts created"
+  ok "Core ServiceAccounts created"
+fi
+
+# Flavor-specific ServiceAccounts
+FLAVOR_SA="${FLAVOR_DIR}/policies/service-accounts.yaml"
+if [ -f "$FLAVOR_SA" ]; then
+  kubectl apply -f "$FLAVOR_SA" 2>&1 | tail -1
+  ok "Flavor ServiceAccounts created ($FLAVOR)"
 fi
 
 # === Deploy ===
@@ -186,6 +215,13 @@ for f in "$COMPONENTS/cilium/default-deny.yaml" \
   fi
 done
 
+# Flavor-specific network policies
+FLAVOR_CILIUM="${FLAVOR_DIR}/policies/cilium-service-policies.yaml"
+if [ -f "$FLAVOR_CILIUM" ]; then
+  kubectl apply -f "$FLAVOR_CILIUM" 2>&1 | tail -1
+  ok "Flavor Cilium policies applied ($FLAVOR)"
+fi
+
 # === Post-deploy: RBAC policies ===
 echo ""
 info "--- Post-deploy: RBAC ---"
@@ -206,7 +242,14 @@ fi
 
 if [ -f "$COMPONENTS/cert-manager/certificates.yaml" ]; then
   kubectl apply -f "$COMPONENTS/cert-manager/certificates.yaml" 2>&1 | tail -1
-  ok "Certificate CRDs created (auto-issued by cert-manager)"
+  ok "Core Certificate CRDs created (auto-issued by cert-manager)"
+fi
+
+# Flavor-specific certificates
+FLAVOR_CERTS="${FLAVOR_DIR}/policies/certificates.yaml"
+if [ -f "$FLAVOR_CERTS" ]; then
+  kubectl apply -f "$FLAVOR_CERTS" 2>&1 | tail -1
+  ok "Flavor certificates created ($FLAVOR)"
 fi
 
 # === Post-deploy: VictoriaMetrics alerting ===
@@ -224,7 +267,14 @@ info "--- Post-deploy: OAuth2 ---"
 
 if [ -f "$COMPONENTS/kanidm/oauth2-client.yaml" ]; then
   kubectl apply -f "$COMPONENTS/kanidm/oauth2-client.yaml" 2>&1 | tail -1
-  ok "OAuth2 client setup ConfigMap created"
+  ok "Core OAuth2 client ConfigMap created"
+fi
+
+# Flavor-specific OAuth2 clients
+FLAVOR_OAUTH="${FLAVOR_DIR}/policies/oauth2-client.yaml"
+if [ -f "$FLAVOR_OAUTH" ]; then
+  kubectl apply -f "$FLAVOR_OAUTH" 2>&1 | tail -1
+  ok "Flavor OAuth2 client ConfigMap created ($FLAVOR)"
 fi
 
 # === Post-deploy: Vault dynamic secrets (AppRole for cert-manager) ===
@@ -259,14 +309,26 @@ else
   ok "All deployed images are signed"
 fi
 echo ""
-info "Components installed:"
+info "Components installed (flavor: $FLAVOR):"
 helm list -A 2>/dev/null | tail -n +2 | awk '{printf "  %-20s %-15s %s\n", $1, $9, $8}'
-echo "  backup (raw)"
+echo "  cnpg (operator)"
+echo "  postgres (raw)"
 echo "  kanidm (raw)"
 echo "  registry (raw)"
 echo "  rustfs (raw)"
-echo "  simplex (raw)"
-echo "  stalwart (raw)"
 echo "  web (raw)"
+
+# Flavor-specific raw components
+case "$FLAVOR" in
+  og)
+    echo "  simplex (raw)"
+    echo "  stalwart (raw)"
+    ;;
+  matrix)
+    echo "  tuwunel (raw)"
+    echo "  cinny (raw)"
+    echo "  livekit (raw)"
+    ;;
+esac
 echo ""
 info "Run ./verify.sh to check security posture."

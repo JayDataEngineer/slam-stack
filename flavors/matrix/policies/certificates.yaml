@@ -1,0 +1,47 @@
+# Slam Stack (Matrix Flavor) — TLS Certificates
+# Tuwunel client API served via cinny ingress on matrix.slamstack.internal
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: matrix-tls
+  namespace: matrix
+spec:
+  secretName: matrix-tls
+  duration: 720h
+  renewBefore: 168h
+  issuerRef:
+    name: vault-pki-issuer
+    kind: ClusterIssuer
+  dnsNames:
+    - matrix.slamstack.internal
+    - cinny.matrix
+    - cinny.matrix.svc.cluster.local
+    - tuwunel.matrix
+    - tuwunel.matrix.svc.cluster.local
+  usages:
+    - server auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: livekit-tls
+  namespace: matrix
+spec:
+  secretName: livekit-tls
+  duration: 720h
+  renewBefore: 168h
+  issuerRef:
+    name: vault-pki-issuer
+    kind: ClusterIssuer
+  dnsNames:
+    - livekit.matrix
+    - livekit.matrix.svc.cluster.local
+  usages:
+    - server auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256

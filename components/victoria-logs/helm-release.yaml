@@ -1,0 +1,58 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: victoria-logs
+  namespace: observability
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: victoria-logs-single
+      sourceRef:
+        kind: HelmRepository
+        name: vm
+        namespace: flux-system
+      interval: 1h
+  values:
+    replicaCount: 1
+    persistence:
+      enabled: true
+      size: 50Gi
+      storageClass: mayastor
+      accessMode: ReadWriteOnce
+    server:
+      logLevel: INFO
+      retentionPeriod: 365d
+      extraArgs:
+        - --storage.minFreeDiskSpaceBytes=10GB
+        - --storage.disableRename=false
+      ingestion:
+        syslog:
+          enabled: true
+          port: 8514
+        json:
+          enabled: true
+          port: 8480
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 10000
+      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]
+      seccompProfile:
+        type: RuntimeDefault
+    service:
+      type: ClusterIP
+      ports:
+        http: 8428
+        syslog: 8514
+        json: 8480
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 384Mi

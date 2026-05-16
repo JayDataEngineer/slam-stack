@@ -12,6 +12,7 @@ info() { echo -e "${BLUE}[*]${NC} $1"; }
 FAILED=0
 
 echo "=== Slam Stack Verification Suite ==="
+echo "  Flavor: ${FLAVOR:-og}"
 echo ""
 
 # === 1. Cilium status ===

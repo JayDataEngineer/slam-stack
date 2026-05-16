@@ -1,0 +1,48 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: mayastor
+  namespace: storage
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: mayastor
+      sourceRef:
+        kind: HelmRepository
+        name: openebs
+        namespace: flux-system
+      interval: 1h
+  values:
+    mayastor:
+      replicaCount: 1
+      csi:
+        node:
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      agents:
+        core:
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      pools:
+        default:
+          - node: "*"
+            type: lvm
+            device: /dev/sdb
+      ioEngine:
+        resources:
+          requests:
+            hugepages-2Mi: 512Mi
+          limits:
+            hugepages-2Mi: 512Mi

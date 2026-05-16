@@ -1,0 +1,172 @@
+# Slam Stack (Matrix Flavor) — Service-Specific Network Policies
+# Allow Matrix services to communicate within the cluster.
+---
+# === Allow traffic to Tuwunel (Matrix homeserver) ===
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-to-tuwunel
+  namespace: matrix
+spec:
+  endpointSelector:
+    matchLabels:
+      app: tuwunel
+  ingress:
+    # Cinny talks to Tuwunel client API
+    - fromEndpoints:
+        - matchLabels:
+            app: cinny
+            "k8s:io.kubernetes.pod.namespace": matrix
+      toPorts:
+        - ports:
+            - port: "8008"
+              protocol: TCP
+    # Headscale mesh users access client API directly
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": network
+      toPorts:
+        - ports:
+            - port: "8008"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": observability
+            app: victoria-logs
+      toPorts:
+        - ports:
+            - port: "8480"
+              protocol: TCP
+    # DNS
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+---
+# === Allow traffic to Cinny (web UI) ===
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-to-cinny
+  namespace: matrix
+spec:
+  endpointSelector:
+    matchLabels:
+      app: cinny
+  ingress:
+    # Headscale mesh users access the web UI
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": network
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": matrix
+            app: tuwunel
+      toPorts:
+        - ports:
+            - port: "8008"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": observability
+            app: victoria-logs
+      toPorts:
+        - ports:
+            - port: "8480"
+              protocol: TCP
+    # DNS
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+---
+# === Allow traffic to LiveKit (voice/video) ===
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-to-livekit
+  namespace: matrix
+spec:
+  endpointSelector:
+    matchLabels:
+      app: livekit
+  ingress:
+    # Tuwunel generates tokens for LiveKit
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": matrix
+            app: tuwunel
+      toPorts:
+        - ports:
+            - port: "7880"
+              protocol: TCP
+    # Matrix clients connect directly to LiveKit for media
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": network
+      toPorts:
+        - ports:
+            - port: "7880"
+              protocol: TCP
+            - port: "7881"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": matrix
+            app: livekit-redis
+      toPorts:
+        - ports:
+            - port: "6379"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": observability
+            app: victoria-logs
+      toPorts:
+        - ports:
+            - port: "8480"
+              protocol: TCP
+    # DNS
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+---
+# === LiveKit Redis ===
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-to-livekit-redis
+  namespace: matrix
+spec:
+  endpointSelector:
+    matchLabels:
+      app: livekit-redis
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": matrix
+            app: livekit
+      toPorts:
+        - ports:
+            - port: "6379"
+              protocol: TCP

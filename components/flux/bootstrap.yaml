@@ -55,7 +55,11 @@ spec:
   secretRef:
     name: flux-git-auth  # Create this secret with your Git token
 ---
-# Flux will sync everything in components/ to the cluster
+# Flux will sync everything in components/ to the cluster (core infra).
+# For the matrix flavor, add a separate Kustomization with:
+#   path: ./flavors/matrix
+# For the OG flavor, separate Kustomization with:
+#   path: ./flavors/og
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -74,10 +78,9 @@ spec:
       kind: Deployment
       name: kanidm
       namespace: identity
-    - apiVersion: apps/v1
-      kind: Deployment
-      name: stalwart
-      namespace: mail
+    # Add flavor-specific health checks as needed:
+    # OG: stalwart (mail), smp-server (comms), xftp-server (comms)
+    # Matrix: matrix (matrix), cinny (matrix), livekit (matrix)
   patches:
     # All pods inherit the Slam Stack security context
     - target:

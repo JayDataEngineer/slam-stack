@@ -1,0 +1,24 @@
+# Slam Stack (OG Flavor) — TLS Certificates for OG Components
+# Applied only when FLAVOR=og.
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: stalwart-tls
+  namespace: mail
+spec:
+  secretName: stalwart-tls
+  duration: 720h
+  renewBefore: 168h
+  issuerRef:
+    name: vault-pki-issuer
+    kind: ClusterIssuer
+  dnsNames:
+    - stalwart.mail
+    - stalwart.mail.svc.cluster.local
+    - mail.slamstack.internal
+  usages:
+    - server auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256

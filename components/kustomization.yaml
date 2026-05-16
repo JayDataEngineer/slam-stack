@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  # CRD-installing components first (Flux retries on failure)
+  - cilium
+  - kyverno
+  - tetragon
+  # Observability
+  - victoria-logs
+  - victoria-metrics
+  # Secrets + PKI
+  - vault
+  - cert-manager
+  # Storage
+  - mayastor
+  # Database
+  - postgres
+  # Identity + networking
+  - kanidm
+  - headscale
+  # Storage services
+  - rustfs
+  - registry
+  # Applications
+  - web
+  # Operations
+  - backup

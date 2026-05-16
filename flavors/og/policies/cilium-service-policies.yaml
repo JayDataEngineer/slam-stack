@@ -1,0 +1,126 @@
+# Slam Stack (OG Flavor) — Service-Specific Network Policies
+# These supplement the core Cilium policies in components/cilium/.
+# Only applied when FLAVOR=og.
+---
+# === Allow traffic to Stalwart (JMAP mail) ===
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-to-stalwart
+  namespace: mail
+spec:
+  endpointSelector:
+    matchLabels:
+      app: stalwart
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": network  # Headscale tunnel
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+            - port: "465"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": observability
+            app: victoria-logs
+      toPorts:
+        - ports:
+            - port: "8480"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": identity
+            app: kanidm
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": vault
+      toPorts:
+        - ports:
+            - port: "8200"
+              protocol: TCP
+    # DNS (required for DNSBL spam filtering and outbound MX lookups)
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+---
+# === SimpleX SMP server (secure messaging relay) ===
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-to-smp-server
+  namespace: comms
+spec:
+  endpointSelector:
+    matchLabels:
+      app: smp-server
+  ingress:
+    # Only reachable via Headscale mesh VPN
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": network
+      toPorts:
+        - ports:
+            - port: "5223"
+              protocol: TCP
+            - port: "443"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": observability
+            app: victoria-logs
+      toPorts:
+        - ports:
+            - port: "8480"
+              protocol: TCP
+---
+# === SimpleX XFTP server (file transfer relay) ===
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-to-xftp-server
+  namespace: comms
+spec:
+  endpointSelector:
+    matchLabels:
+      app: xftp-server
+  ingress:
+    # Only reachable via Headscale mesh VPN
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": network
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": observability
+            app: victoria-logs
+      toPorts:
+        - ports:
+            - port: "8480"
+              protocol: TCP
+    # XFTP may need to reach SMP server for notifications
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": comms
+            app: smp-server
+      toPorts:
+        - ports:
+            - port: "5223"
+              protocol: TCP

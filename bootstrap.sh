@@ -12,9 +12,10 @@ warn()  { echo -e "${YELLOW}[!]${NC} $1"; }
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MODE="${1:---dev}"
+FLAVOR="${FLAVOR:-og}"
 
 echo "=== Slam Stack Bootstrap ==="
-echo "Mode: ${MODE}"
+echo "Mode: ${MODE}   Flavor: ${FLAVOR}"
 echo ""
 
 # === Load environment (fail if missing in prod) ===
@@ -87,8 +88,9 @@ cd "$SCRIPT_DIR"
 ok "Cosign keypair ready"
 
 # === 3. Deploy components ===
-info "Step 3/7: Deploying stack components..."
+info "Step 3/7: Deploying stack components (flavor: ${FLAVOR})..."
 export KUBECONFIG="${HOME}/.kube/slam-stack-config"
+export FLAVOR
 bash deploy.sh
 ok "Stack components deployed"
 
@@ -119,20 +121,30 @@ echo "  │  Registry:  registry.registry.svc.cluster.local:5000     │"
 echo "  │  Dashboard: web/deploy.yaml                              │"
 echo "  └──────────────────────────────────────────────────────────┘"
 echo ""
-echo "  Components installed:"
+echo "  Components installed (flavor: ${FLAVOR}):"
 echo "    Cilium (CNI + WireGuard)"
 echo "    Kyverno (admission + Cosign enforcement)"
 echo "    Tetragon (eBPF runtime security)"
 echo "    Vault/OpenBao (dynamic secrets, TPM auto-unseal)"
 echo "    VictoriaLogs (tamper-evident audit logging)"
-echo "    Kanidm (identity/OIDC, WebAuthn-only)"
+echo "    Kanidm (identity/OIDC)"
 echo "    Headscale (Tailscale-compatible mesh)"
-echo "    SurrealDB (multi-model database)"
-echo "    Stalwart (JMAP email)"
 echo "    RustFS (WORM object storage, Vault KMS)"
 echo "    Mayastor (NVMe-oF block storage, LUKS encrypted)"
+echo "    PostgreSQL (CNPG managed)"
 echo "    Registry (local container registry)"
 echo "    Web dashboard (Leptos + Axum)"
+case "$FLAVOR" in
+  og)
+    echo "    Stalwart (JMAP email)"
+    echo "    SimpleX Chat (SMP + XFTP relay)"
+    ;;
+  matrix)
+    echo "    Matrix (Continuwuity/Tuwunel)"
+    echo "    Cinny (Discord-like web UI)"
+    echo "    LiveKit (E2EE voice/video)"
+    ;;
+esac
 echo ""
 
 # === 7. Hardware gaps reminder ===

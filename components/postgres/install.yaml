@@ -1,0 +1,67 @@
+# Slam Stack — PostgreSQL via CloudNativePG
+# Hardened PostgreSQL 16 with pgAudit, managed by CNPG operator
+# Supports Vault dynamic credentials via native PostgreSQL wire protocol
+# Pattern adapted from RedshiftDB's CNPG deployment
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: database
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-credentials
+  namespace: database
+type: kubernetes.io/basic-auth
+stringData:
+  username: postgres
+  password: "REPLACE-ME-BEFORE-DEPLOY"
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: slam-stack-pg
+  namespace: database
+spec:
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  instances: 1
+
+  superuserSecret:
+    name: postgres-credentials
+
+  bootstrap:
+    initdb:
+      database: dashboard
+      owner: postgres
+
+  storage:
+    size: 20Gi
+    storageClass: mayastor
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 384Mi
+
+  postgresql:
+    shared_preload_libraries:
+      - pgaudit
+    parameters:
+      pgaudit.log: "write"
+      pgaudit.log_level: "log"
+      pgaudit.log_parameter: "on"
+      password_encryption: "scram-sha-256"
+      log_connections: "on"
+      log_disconnections: "on"
+
+  monitoring:
+    enablePodMonitor: true
+
+  managed:
+    services:
+      disabledDefaultServices:
+        - ro

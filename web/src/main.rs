@@ -7,17 +7,13 @@ async fn main() {
     use leptos_axum::{generate_route_list, LeptosRoutes};
     use std::sync::Arc;
 
-    // Initialize SurrealDB connection
-    let db_url = std::env::var("SURREALDB_URL")
-        .unwrap_or_else(|_| "http://surrealdb.database.svc.cluster.local:8000".into());
-    let db_ns = std::env::var("SURREALDB_NS").unwrap_or_else(|_| "slamstack".into());
-    let db_name = std::env::var("SURREALDB_DB").unwrap_or_else(|_| "dashboard".into());
-    let db_user = std::env::var("SURREALDB_USER").unwrap_or_else(|_| "root".into());
-    let db_pass = std::env::var("SURREALDB_PASS").unwrap_or_else(|_| "root".into());
+    // Initialize PostgreSQL connection
+    let db_url = std::env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "postgresql://postgres:password@slam-stack-pg-rw.database.svc.cluster.local:5432/dashboard".into());
 
-    match slam_stack_web::state::init(&db_url, &db_ns, &db_name, &db_user, &db_pass).await {
-        Ok(()) => eprintln!("Connected to SurrealDB at {db_url}"),
-        Err(e) => eprintln!("WARNING: SurrealDB connection failed: {e} — incident CRUD will fail"),
+    match slam_stack_web::state::init(&db_url).await {
+        Ok(()) => eprintln!("Connected to PostgreSQL"),
+        Err(e) => eprintln!("WARNING: PostgreSQL connection failed: {e} — incident CRUD will fail"),
     }
 
     let conf = get_configuration(Some("Cargo.toml")).unwrap();

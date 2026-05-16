@@ -44,7 +44,7 @@ pub fn IncidentsPage() -> impl IntoView {
     view! {
         <div class="page-header">
             <h1>"Incidents"</h1>
-            <p>"Security incident tracking — backed by SurrealDB"</p>
+            <p>"Security incident tracking — backed by PostgreSQL"</p>
         </div>
 
         <div class="toolbar">

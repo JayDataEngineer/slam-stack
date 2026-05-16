@@ -1,0 +1,63 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: headscale
+  namespace: network
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: headscale
+      sourceRef:
+        kind: HelmRepository
+        name: gabe565
+        namespace: flux-system
+      interval: 1h
+  values:
+    replicaCount: 1
+    config:
+      oidc:
+        issuer:
+          enabled: true
+          url: "https://id.slamstack.internal/oauth2"
+          clientId: "headscale"
+          clientSecret: ""
+        scope: ["openid", "profile", "email"]
+        onlyStartIfOidcIsAvailable: true
+      acl:
+        enabled: true
+        policy:
+          - action: accept
+            src: ["autogroup:member"]
+            dst: ["headscale:*"]
+      dns:
+        domain: "slamstack.internal"
+        magicDns: true
+        baseDomain: "internal.slamstack"
+      derp:
+        urls:
+          - https://controlplane.tailscale.com/derpmap/default
+        server:
+          enabled: false
+    serviceAccount:
+      create: false
+      name: headscale
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 10000
+      fsGroup: 10000
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: ["ALL"]
+      seccompProfile:
+        type: RuntimeDefault
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi

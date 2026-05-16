@@ -1,0 +1,9 @@
+# Slam Stack — Base Cluster Overlay
+# References: HelmRepository sources + all core components.
+# Combined with flavor overlay at clusters/<flavor>/ to select flavor.
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - sources
+  - ../../components

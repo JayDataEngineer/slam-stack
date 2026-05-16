@@ -3,11 +3,9 @@
 # Everything else is denied by the cluster-wide default-deny policy.
 #
 # Architecture:
-#   Ingress  → Headscale/Cloudflare Tunnel → services
+#   Ingress  → Headscale mesh VPN → services
 #   Kanidm   ← OIDC consumers (everything talks to Kanidm on 443)
 #   Vault    ← apps needing secrets (on 8200)
-#   SurrealDB ← apps needing database (on 8000)
-#   Stalwart  ← mail clients (on 443/465)
 #   VictoriaLogs ← apps sending audit logs (on 8480)
 #   RustFS   ← apps needing object storage (on 9000)
 #   Registry ← kube-system pull, vault secrets (on 5000)
@@ -70,30 +68,37 @@ spec:
             - port: "8480"
               protocol: TCP
 ---
-# === Allow pod-to-pod traffic to SurrealDB ===
+# === Allow traffic to PostgreSQL (CNPG) ===
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
-  name: allow-to-surrealdb
+  name: allow-to-postgres
   namespace: database
 spec:
   endpointSelector:
     matchLabels:
-      app: surrealdb
+      cnpg.io/cluster: slam-stack-pg
   ingress:
     - fromEndpoints:
         - matchLabels:
-            "k8s:io.kubernetes.pod.namespace": vault  # Vault for dynamic creds
+            "k8s:io.kubernetes.pod.namespace": vault
       toPorts:
         - ports:
-            - port: "8000"
+            - port: "5432"
               protocol: TCP
     - fromEndpoints:
         - matchLabels:
-            "k8s:io.kubernetes.pod.namespace": web  # Dashboard
+            "k8s:io.kubernetes.pod.namespace": web
       toPorts:
         - ports:
-            - port: "8000"
+            - port: "5432"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": backup
+      toPorts:
+        - ports:
+            - port: "5432"
               protocol: TCP
   egress:
     - toEndpoints:
@@ -159,14 +164,14 @@ spec:
             - port: "8200"
               protocol: TCP
   egress:
-    # Vault talks to SurrealDB ONLY (not entire database namespace)
+    # Vault talks to PostgreSQL for dynamic credential management
     - toEndpoints:
         - matchLabels:
             "k8s:io.kubernetes.pod.namespace": database
-            app: surrealdb
+            cnpg.io/cluster: slam-stack-pg
       toPorts:
         - ports:
-            - port: "8000"
+            - port: "5432"
               protocol: TCP
     - toEndpoints:
         - matchLabels:
@@ -346,7 +351,7 @@ spec:
     # S3 API — only workloads that need object storage
     - fromEndpoints:
         - matchLabels:
-            "k8s:io.kubernetes.pod.namespace": database  # SurrealDB backups
+            "k8s:io.kubernetes.pod.namespace": database  # PostgreSQL backups
       toPorts:
         - ports:
             - port: "9000"
@@ -382,60 +387,6 @@ spec:
         - ports:
             - port: "8200"
               protocol: TCP
----
-# === Allow traffic to Stalwart (JMAP mail) ===
-apiVersion: cilium.io/v2
-kind: CiliumNetworkPolicy
-metadata:
-  name: allow-to-stalwart
-  namespace: mail
-spec:
-  endpointSelector:
-    matchLabels:
-      app: stalwart
-  ingress:
-    - fromEndpoints:
-        - matchLabels:
-            "k8s:io.kubernetes.pod.namespace": network  # Headscale tunnel
-      toPorts:
-        - ports:
-            - port: "443"
-              protocol: TCP
-            - port: "465"
-              protocol: TCP
-  egress:
-    - toEndpoints:
-        - matchLabels:
-            "k8s:io.kubernetes.pod.namespace": observability
-            app: victoria-logs
-      toPorts:
-        - ports:
-            - port: "8480"
-              protocol: TCP
-    - toEndpoints:
-        - matchLabels:
-            "k8s:io.kubernetes.pod.namespace": identity
-            app: kanidm
-      toPorts:
-        - ports:
-            - port: "443"
-              protocol: TCP
-    - toEndpoints:
-        - matchLabels:
-            "k8s:io.kubernetes.pod.namespace": vault
-      toPorts:
-        - ports:
-            - port: "8200"
-              protocol: TCP
-    # DNS (required for DNSBL spam filtering and outbound MX lookups)
-    - toEndpoints:
-        - matchLabels:
-            "k8s:io.kubernetes.pod.namespace": kube-system
-            k8s-app: kube-dns
-      toPorts:
-        - ports:
-            - port: "53"
-              protocol: UDP
 ---
 # === Headscale mesh VPN ===
 apiVersion: cilium.io/v2
@@ -558,10 +509,10 @@ spec:
     - toEndpoints:
         - matchLabels:
             "k8s:io.kubernetes.pod.namespace": database
-            app: surrealdb
+            cnpg.io/cluster: slam-stack-pg
       toPorts:
         - ports:
-            - port: "8000"
+            - port: "5432"
               protocol: TCP
     # DNS
     - toEndpoints:
@@ -572,75 +523,6 @@ spec:
         - ports:
             - port: "53"
               protocol: UDP
----
-# === SimpleX SMP server (secure messaging relay) ===
-apiVersion: cilium.io/v2
-kind: CiliumNetworkPolicy
-metadata:
-  name: allow-to-smp-server
-  namespace: comms
-spec:
-  endpointSelector:
-    matchLabels:
-      app: smp-server
-  ingress:
-    # Only reachable via Headscale mesh VPN
-    - fromEndpoints:
-        - matchLabels:
-            "k8s:io.kubernetes.pod.namespace": network
-      toPorts:
-        - ports:
-            - port: "5223"
-              protocol: TCP
-            - port: "443"
-              protocol: TCP
-  egress:
-    - toEndpoints:
-        - matchLabels:
-            "k8s:io.kubernetes.pod.namespace": observability
-            app: victoria-logs
-      toPorts:
-        - ports:
-            - port: "8480"
-              protocol: TCP
----
-# === SimpleX XFTP server (file transfer relay) ===
-apiVersion: cilium.io/v2
-kind: CiliumNetworkPolicy
-metadata:
-  name: allow-to-xftp-server
-  namespace: comms
-spec:
-  endpointSelector:
-    matchLabels:
-      app: xftp-server
-  ingress:
-    # Only reachable via Headscale mesh VPN
-    - fromEndpoints:
-        - matchLabels:
-            "k8s:io.kubernetes.pod.namespace": network
-      toPorts:
-        - ports:
-            - port: "443"
-              protocol: TCP
-  egress:
-    - toEndpoints:
-        - matchLabels:
-            "k8s:io.kubernetes.pod.namespace": observability
-            app: victoria-logs
-      toPorts:
-        - ports:
-            - port: "8480"
-              protocol: TCP
-    # XFTP may need to reach SMP server for notifications
-    - toEndpoints:
-        - matchLabels:
-            "k8s:io.kubernetes.pod.namespace": comms
-            app: smp-server
-      toPorts:
-        - ports:
-            - port: "5223"
-              protocol: TCP
 ---
 # === Mayastor storage ===
 apiVersion: cilium.io/v2

@@ -1,0 +1,72 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: cilium
+  namespace: kube-system
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: cilium
+      sourceRef:
+        kind: HelmRepository
+        name: cilium
+        namespace: flux-system
+      interval: 1h
+  values:
+    cluster:
+      name: slam-stack
+    rollOutCiliumPods: true
+    encryption:
+      enabled: true
+      type: wireguard
+      nodeEncryption: true
+    kubeProxyReplacement: true
+    k8sServiceHost: 127.0.0.1
+    k8sServicePort: 7445
+    autoDirectNodeRoutes: true
+    routingMode: native
+    ipv4:
+      enabled: true
+    ipv6:
+      enabled: false
+    bpf:
+      masquerade: true
+    bandwidthManager:
+      enabled: true
+    l2announcements:
+      enabled: false
+    hubble:
+      enabled: true
+      relay:
+        enabled: true
+      ui:
+        enabled: false
+      metrics:
+        enabled:
+          - dns
+          - tcp
+          - flow
+          - icmp
+          - http
+    ipam:
+      mode: kubernetes
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 10000
+      fsGroup: 10000
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: ["ALL"]
+      seccompProfile:
+        type: RuntimeDefault

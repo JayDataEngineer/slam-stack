@@ -5,8 +5,6 @@ use crate::models::*;
 
 // =====================================================
 // Static data (dashboard, security, logs)
-// These use hardcoded data that would eventually be
-// replaced by live Kubernetes API queries in production.
 // =====================================================
 
 pub fn get_components() -> Vec<ComponentStatus> {
@@ -63,16 +61,16 @@ pub fn get_components() -> Vec<ComponentStatus> {
             version: "2.5.3",
             ram_mb: 300,
             namespace: "vault",
-            description: "Ephemeral secrets engine",
+            description: "Dynamic secrets + PKI engine",
         },
         ComponentStatus {
-            name: "SurrealDB",
+            name: "PostgreSQL",
             status: Status::Healthy,
-            language: "Rust",
-            version: "2.3.7",
+            language: "C",
+            version: "16.0",
             ram_mb: 300,
             namespace: "database",
-            description: "Multi-model database",
+            description: "CNPG-managed, pgAudit, Vault dynamic creds",
         },
         ComponentStatus {
             name: "Stalwart",
@@ -194,7 +192,7 @@ pub fn get_logs() -> Vec<LogEntry> {
             timestamp: "2026-05-09T14:28:00Z".into(),
             level: LogLevel::Info,
             source: "vault".into(),
-            message: "Rotated SurrealDB credentials for role 'slam-stack-app' (expired 15m)".into(),
+            message: "Rotated PostgreSQL credentials for role 'slam-stack-app' (expired 15m)".into(),
         },
         LogEntry {
             timestamp: "2026-05-09T14:25:13Z".into(),
@@ -212,7 +210,7 @@ pub fn get_logs() -> Vec<LogEntry> {
             timestamp: "2026-05-09T14:15:30Z".into(),
             level: LogLevel::Debug,
             source: "cilium".into(),
-            message: "Network policy 'allow-to-kanidm' matched 3 endpoints".into(),
+            message: "Network policy 'allow-to-postgres' matched 3 endpoints".into(),
         },
         LogEntry {
             timestamp: "2026-05-09T14:00:00Z".into(),
@@ -229,8 +227,8 @@ pub fn get_logs() -> Vec<LogEntry> {
         LogEntry {
             timestamp: "2026-05-09T13:30:00Z".into(),
             level: LogLevel::Info,
-            source: "surreal-db".into(),
-            message: "WAL checkpoint completed: 128MB reclaimed".into(),
+            source: "postgres".into(),
+            message: "pgAudit: autovacuum completed on dashboard.incident".into(),
         },
         LogEntry {
             timestamp: "2026-05-09T13:15:00Z".into(),
@@ -294,7 +292,7 @@ pub fn get_security_findings() -> Vec<SecurityFinding> {
         SecurityFinding {
             category: "Credential Rotation",
             status: FindingStatus::Pass,
-            description: "Vault dynamic secrets: 15m DB credential rotation",
+            description: "Vault dynamic secrets: 15m PostgreSQL credential rotation via CNPG",
             layer: "Secrets",
         },
         SecurityFinding {
@@ -318,7 +316,7 @@ pub fn get_security_findings() -> Vec<SecurityFinding> {
         SecurityFinding {
             category: "Audit Trail",
             status: FindingStatus::Pass,
-            description: "VictoriaLogs WORM storage with tamper-evident signing",
+            description: "VictoriaLogs WORM storage + pgAudit write-level logging",
             layer: "Observability",
         },
         SecurityFinding {
@@ -349,9 +347,49 @@ pub fn get_security_findings() -> Vec<SecurityFinding> {
 }
 
 // =====================================================
-// SurrealDB-backed CRUD (incident tracking)
+// PostgreSQL-backed CRUD (incident tracking)
 // Server functions — body stripped on WASM build.
 // =====================================================
+
+#[cfg(feature = "ssr")]
+use sqlx::FromRow;
+
+#[cfg(feature = "ssr")]
+#[derive(FromRow)]
+struct IncidentRow {
+    id: i64,
+    title: String,
+    description: String,
+    severity: String,
+    status: String,
+    created_at: String,
+    updated_at: String,
+}
+
+#[cfg(feature = "ssr")]
+impl From<IncidentRow> for Incident {
+    fn from(row: IncidentRow) -> Self {
+        Incident {
+            id: row.id.to_string(),
+            title: row.title,
+            description: row.description,
+            severity: match row.severity.as_str() {
+                "Critical" => IncidentSeverity::Critical,
+                "High" => IncidentSeverity::High,
+                "Medium" => IncidentSeverity::Medium,
+                _ => IncidentSeverity::Low,
+            },
+            status: match row.status.as_str() {
+                "Open" => IncidentStatus::Open,
+                "Investigating" => IncidentStatus::Investigating,
+                "Contained" => IncidentStatus::Contained,
+                _ => IncidentStatus::Resolved,
+            },
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        }
+    }
+}
 
 fn server_err(e: impl std::fmt::Display) -> ServerFnError {
     ServerFnError::ServerError(e.to_string())
@@ -362,7 +400,7 @@ const VALID_STATUSES: &[&str] = &["Open", "Investigating", "Contained", "Resolve
 const MAX_FIELD_LEN: usize = 4096;
 
 fn validate_incident_id(id: &str) -> Result<(), ServerFnError> {
-    if id.is_empty() || id.len() > 64 || !id.chars().all(|c| c.is_alphanumeric() || c == ':' || c == '_' || c == '-') {
+    if id.is_empty() || id.len() > 20 || !id.chars().all(|c| c.is_ascii_digit()) {
         return Err(ServerFnError::ServerError("Invalid incident ID".into()));
     }
     Ok(())
@@ -370,17 +408,14 @@ fn validate_incident_id(id: &str) -> Result<(), ServerFnError> {
 
 #[server]
 pub async fn get_incidents() -> Result<Vec<Incident>, ServerFnError> {
-    let db = crate::state::get();
-    let mut resp = db
-        .query(
-            "SELECT record::id(id) as id, title, description, severity, status, created_at, updated_at FROM incident ORDER BY created_at DESC"
-        )
-        .await
-        .map_err(server_err)?;
-    let incidents: Vec<Incident> = resp
-        .take(0)
-        .map_err(server_err)?;
-    Ok(incidents)
+    let pool = crate::state::get();
+    let rows: Vec<IncidentRow> = sqlx::query_as(
+        "SELECT id, title, description, severity, status, created_at, updated_at FROM incident ORDER BY created_at DESC",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(server_err)?;
+    Ok(rows.into_iter().map(Incident::from).collect())
 }
 
 #[server]
@@ -399,20 +434,18 @@ pub async fn create_incident(
         return Err(ServerFnError::ServerError("Invalid severity".into()));
     }
 
-    let db = crate::state::get();
+    let pool = crate::state::get();
     let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
-    let data = serde_json::json!({
-        "title": title,
-        "description": description,
-        "severity": severity,
-        "status": "Open",
-        "created_at": now,
-        "updated_at": now,
-    });
-    db.query("INSERT INTO incident $data")
-        .bind(("data", data))
-        .await
-        .map_err(server_err)?;
+    sqlx::query(
+        "INSERT INTO incident (title, description, severity, status, created_at, updated_at) VALUES ($1, $2, $3, 'Open', $4, $4)",
+    )
+    .bind(&title)
+    .bind(&description)
+    .bind(&severity)
+    .bind(&now)
+    .execute(pool)
+    .await
+    .map_err(server_err)?;
     Ok(())
 }
 
@@ -426,12 +459,14 @@ pub async fn update_incident_status(
         return Err(ServerFnError::ServerError("Invalid status".into()));
     }
 
-    let db = crate::state::get();
+    let pool = crate::state::get();
     let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
-    db.query("UPDATE type::thing($id) SET status = $status, updated_at = $now")
-        .bind(("id", format!("incident:{id}")))
-        .bind(("status", status))
-        .bind(("now", now))
+    let id: i64 = id.parse().map_err(|e| server_err(e))?;
+    sqlx::query("UPDATE incident SET status = $1, updated_at = $2 WHERE id = $3")
+        .bind(&status)
+        .bind(&now)
+        .bind(id)
+        .execute(pool)
         .await
         .map_err(server_err)?;
     Ok(())
@@ -441,9 +476,11 @@ pub async fn update_incident_status(
 pub async fn delete_incident(id: String) -> Result<(), ServerFnError> {
     validate_incident_id(&id)?;
 
-    let db = crate::state::get();
-    db.query("DELETE type::thing($id)")
-        .bind(("id", format!("incident:{id}")))
+    let pool = crate::state::get();
+    let id: i64 = id.parse().map_err(|e| server_err(e))?;
+    sqlx::query("DELETE FROM incident WHERE id = $1")
+        .bind(id)
+        .execute(pool)
         .await
         .map_err(server_err)?;
     Ok(())

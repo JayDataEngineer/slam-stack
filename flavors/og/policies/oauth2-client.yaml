@@ -1,0 +1,45 @@
+# Slam Stack (OG Flavor) — Kanidm OAuth2 Client Registration
+# Applied only when FLAVOR=og.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kanidm-oauth2-setup-og
+  namespace: identity
+data:
+  # Stalwart Mail OAuth2 client
+  01-create-stalwart-client.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    echo "=== Creating OAuth2 client for Stalwart Mail ==="
+    kubectl exec -n identity kanidm-0 -- \
+      kanidm system oauth2 create \
+        --displayname "Stalwart Mail Server" \
+        --origin "https://mail.slamstack.internal" \
+        stalwart
+    echo ""
+    echo "Getting client secret..."
+    STALWART_SECRET=$(kubectl exec -n identity kanidm-0 -- \
+      kanidm system oauth2 show-basic-secret stalwart 2>/dev/null | tail -1)
+    echo ""
+    echo "Creating K8s secret for Stalwart..."
+    kubectl create secret generic stalwart-oidc \
+      -n mail \
+      --from-literal=client-secret="$STALWART_SECRET" \
+      --dry-run=client -o yaml | kubectl apply -f -
+
+    echo "Enabling scopes for Stalwart..."
+    kubectl exec -n identity kanidm-0 -- \
+      kanidm system oauth2 update-scope-map \
+        stalwart \
+        --name openid --name profile --name email \
+        idm_all_persons
+    echo "Stalwart OAuth2 client configured."
+
+  # Run OG flavor setup
+  setup-og.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    echo "=== Setting up OG flavor OAuth2 clients ==="
+    bash /data/01-create-stalwart-client.sh
+    echo "OG flavor OAuth2 setup complete"
