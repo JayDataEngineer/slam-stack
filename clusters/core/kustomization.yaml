@@ -1,0 +1,11 @@
+# Slam Stack — Core Flavor Cluster Overlay
+# Deploys all infrastructure without any flavor-specific apps.
+# Use for bare-metal nodes that only run core services.
+#
+# Point Flux bootstrap at this path:
+#   flux bootstrap ... --path=./clusters/core
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../common

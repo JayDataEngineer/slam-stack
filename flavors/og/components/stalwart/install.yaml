@@ -99,11 +99,11 @@ data:
 
     [audit]
     enabled = true
-    remote = "tcp://victoria-logs-audit.observability:8480"
+    remote = "tcp://victoria-logs.observability.svc.cluster.local:8480"
 
     [tracer]
     enabled = true
-    endpoint = "victoria-logs-audit.observability:8480"
+    endpoint = "victoria-logs.observability.svc.cluster.local:8480"
 ---
 apiVersion: apps/v1
 kind: Deployment

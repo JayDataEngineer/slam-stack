@@ -71,7 +71,7 @@ data:
     enabled = true
     path = "/var/log/kanidm/audit.log"
     # Forward to VictoriaLogs
-    remote = "tcp://victoria-logs-audit.observability:8480"
+    remote = "tcp://victoria-logs.observability.svc.cluster.local:8480"
 
     [rate_limit]
     enabled = true

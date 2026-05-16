@@ -14,7 +14,7 @@ tetragon:
       enabled: false
     tcp:
       enabled: true
-      address: "victoria-logs-audit:8480"
+      address: "victoria-logs.observability.svc.cluster.local:8480"
 
   # Security: run Tetragon itself locked down
   securityContext:

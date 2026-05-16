@@ -36,7 +36,7 @@ spec:
           }
           audit {
             type = "socket"
-            address = "victoria-logs-audit:8480"
+            address = "victoria-logs.observability.svc.cluster.local:8480"
             socket_type = "tcp"
             mode = "stream"
           }
@@ -70,7 +70,7 @@ spec:
               mechanism = 0x1089
             }
             audit "socket" {
-              address = "victoria-logs-audit:8480"
+              address = "victoria-logs.observability.svc.cluster.local:8480"
               socket_type = "tcp"
               mode = "stream"
             }
