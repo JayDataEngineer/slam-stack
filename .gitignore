@@ -8,3 +8,6 @@ cosign.key
 build.sh.bundle
 _site/
 _out/
+.terraform/
+*.tfstate
+*.tfstate.backup

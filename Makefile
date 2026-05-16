@@ -7,7 +7,12 @@ SHELL := /bin/bash
 KUBECONFIG := $(HOME)/.kube/slam-stack-config
 FLAVOR ?= og
 TOFU_DIR := tofu
-TOFU := $(shell command -v tofu 2>/dev/null || echo "")
+TOFU_IMAGE := ghcr.io/opentofu/opentofu:1.9.0
+TOFU := docker run --rm -i \
+  -v $(PWD):/workspace \
+  -v $(HOME)/.kube:/root/.kube \
+  -w /workspace \
+  $(TOFU_IMAGE)
 
 # OpenTofu variables (set via env or terraform.tfvars)
 NODE_IP ?=
@@ -87,24 +92,24 @@ tofu_vars = $(if $(NODE_IP), \
   -var="git_repo_url=$(GIT_REPO_URL)" -var="git_branch=$(GIT_BRANCH)", \
   $(error Set NODE_IP: export NODE_IP=192.168.1.100))
 
-## tofu-init — Initialize OpenTofu working directory
+## tofu-init — Initialize OpenTofu working directory (via container)
 tofu-init:
-	@if [ -z "$(TOFU)" ]; then echo "ERROR: OpenTofu not installed. Install from https://opentofu.org"; exit 1; fi
+	@docker info >/dev/null 2>&1 || { echo "ERROR: Docker required for tofu targets"; exit 1; }
 	$(TOFU) -chdir=$(TOFU_DIR) init
 
 ## tofu-plan — Preview the Talos cluster + Flux bootstrap plan
 tofu-plan:
-	@if [ -z "$(TOFU)" ]; then echo "ERROR: OpenTofu not installed."; exit 1; fi
+	@docker info >/dev/null 2>&1 || { echo "ERROR: Docker required"; exit 1; }
 	$(TOFU) -chdir=$(TOFU_DIR) plan $(tofu_vars)
 
-## cluster — Create Talos cluster and bootstrap Flux via OpenTofu
+## cluster — Create Talos cluster + Flux bootstrap (tofu in container)
 cluster: tofu-init
 	$(TOFU) -chdir=$(TOFU_DIR) apply $(tofu_vars)
 	@echo "Cluster created. Kubeconfig at ~/.kube/slam-stack-config"
 
 ## tofu-destroy — Tear down the Talos cluster via OpenTofu
 tofu-destroy:
-	@if [ -z "$(TOFU)" ]; then echo "ERROR: OpenTofu not installed."; exit 1; fi
+	@docker info >/dev/null 2>&1 || { echo "ERROR: Docker required"; exit 1; }
 	$(TOFU) -chdir=$(TOFU_DIR) destroy $(tofu_vars)
 
 ## clean — Destroy dev cluster
