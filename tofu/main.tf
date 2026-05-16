@@ -105,6 +105,6 @@ resource "flux_bootstrap_git" "this" {
 resource "local_file" "kubeconfig" {
   depends_on      = [data.talos_cluster_kubeconfig.this]
   content         = data.talos_cluster_kubeconfig.this.kubeconfig_raw
-  filename        = pathexpand("~/.kube/${var.cluster_name}")
+  filename        = pathexpand("~/.kube/${var.cluster_name}-config")
   file_permission = "0600"
 }

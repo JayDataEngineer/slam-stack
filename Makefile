@@ -6,8 +6,17 @@
 SHELL := /bin/bash
 KUBECONFIG := $(HOME)/.kube/slam-stack-config
 FLAVOR ?= og
+TOFU_DIR := tofu
+TOFU := $(shell command -v tofu 2>/dev/null || echo "")
 
-.PHONY: all bootstrap bootstrap-og bootstrap-matrix setup deploy deploy-og deploy-matrix deploy-core verify web web-push sign clean destroy help
+# OpenTofu variables (set via env or terraform.tfvars)
+NODE_IP ?=
+DOMAIN ?= slam.lab
+INSTALL_DISK ?= /dev/sda
+GIT_REPO_URL ?= $(shell git remote get-url origin 2>/dev/null || echo "https://github.com/your-org/slam-stack.git")
+GIT_BRANCH ?= master
+
+.PHONY: all bootstrap bootstrap-og bootstrap-matrix setup deploy deploy-og deploy-matrix deploy-core verify web web-push sign clean cluster destroy tofu-* help
 
 all: help
 
@@ -71,6 +80,32 @@ sign:
 			--bundle "$${f}.bundle" "$$f" 2>/dev/null; \
 	done
 	@echo "All scripts signed"
+
+tofu_vars = $(if $(NODE_IP), \
+  -var="node_ip=$(NODE_IP)" -var="domain=$(DOMAIN)" \
+  -var="flavor=$(FLAVOR)" -var="install_disk=$(INSTALL_DISK)" \
+  -var="git_repo_url=$(GIT_REPO_URL)" -var="git_branch=$(GIT_BRANCH)", \
+  $(error Set NODE_IP: export NODE_IP=192.168.1.100))
+
+## tofu-init — Initialize OpenTofu working directory
+tofu-init:
+	@if [ -z "$(TOFU)" ]; then echo "ERROR: OpenTofu not installed. Install from https://opentofu.org"; exit 1; fi
+	$(TOFU) -chdir=$(TOFU_DIR) init
+
+## tofu-plan — Preview the Talos cluster + Flux bootstrap plan
+tofu-plan:
+	@if [ -z "$(TOFU)" ]; then echo "ERROR: OpenTofu not installed."; exit 1; fi
+	$(TOFU) -chdir=$(TOFU_DIR) plan $(tofu_vars)
+
+## cluster — Create Talos cluster and bootstrap Flux via OpenTofu
+cluster: tofu-init
+	$(TOFU) -chdir=$(TOFU_DIR) apply $(tofu_vars)
+	@echo "Cluster created. Kubeconfig at ~/.kube/slam-stack-config"
+
+## tofu-destroy — Tear down the Talos cluster via OpenTofu
+tofu-destroy:
+	@if [ -z "$(TOFU)" ]; then echo "ERROR: OpenTofu not installed."; exit 1; fi
+	$(TOFU) -chdir=$(TOFU_DIR) destroy $(tofu_vars)
 
 ## clean — Destroy dev cluster
 clean:
