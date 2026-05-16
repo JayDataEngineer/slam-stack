@@ -43,6 +43,9 @@ spec:
                   - kyverno
                   - kube-system
                   - cert-manager
+      generateSuccessEvents: false
+      backgroundScan: true
+      backgroundScanInterval: 1h
     resources:
       requests:
         cpu: 100m

@@ -27,12 +27,27 @@ spec:
     k8sServicePort: 7445
     autoDirectNodeRoutes: true
     routingMode: native
+    endpointRoutes:
+      enabled: true
+    enableIdentityMark: true
+    authentication:
+      mutual:
+        enabled: false
+        spire:
+          enabled: false
+    policyEnforcementMode: always
+    enableL7Proxy: true
     ipv4:
       enabled: true
     ipv6:
       enabled: false
     bpf:
       masquerade: true
+      tproxy: true
+    cgroup:
+      autoMount:
+        enabled: true
+      hostRoot: /sys/fs/cgroup
     bandwidthManager:
       enabled: true
     l2announcements:
@@ -46,9 +61,9 @@ spec:
       metrics:
         enabled:
           - dns
+          - drop
           - tcp
           - flow
-          - icmp
           - http
     ipam:
       mode: kubernetes
@@ -59,6 +74,14 @@ spec:
       limits:
         cpu: 500m
         memory: 512Mi
+    operator:
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
     podSecurityContext:
       runAsNonRoot: true
       runAsUser: 10000

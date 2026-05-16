@@ -34,9 +34,47 @@ spec:
             tls_cert_file = "/vault/tls/tls.crt"
             tls_key_file = "/vault/tls/tls.key"
           }
-          audit { enabled = true }
+          audit {
+            type = "socket"
+            address = "victoria-logs-audit:8480"
+            socket_type = "tcp"
+            mode = "stream"
+          }
           api_addr = "https://vault.vault.svc.cluster.local:8200"
           cluster_addr = "https://vault.vault.svc.cluster.local:8201"
+          disable_mlock = false
+      ha:
+        enabled: true
+        replicas: 1
+        raft:
+          enabled: true
+          setNodeId: true
+          config: |
+            storage "raft" {
+              path = "/vault/data"
+              node_id = "vault-0"
+              retry_join {
+                leader_api_addr = "https://vault-0.vault-internal:8200"
+              }
+            }
+            cluster_name = "slam-stack"
+            listener "tcp" {
+              address = "127.0.0.1:8200"
+              tls_disable = false
+            }
+            seal "pkcs11" {
+              lib = "/usr/lib/x86_64-linux-gnu/libtpm2_pkcs11.so"
+              slot = "0"
+              pin = ""
+              key_label = "vault-unseal"
+              mechanism = 0x1089
+            }
+            audit "socket" {
+              address = "victoria-logs-audit:8480"
+              socket_type = "tcp"
+              mode = "stream"
+            }
+            disable_mlock = false
       extraVolumes:
         - type: secret
           name: vault-tls
@@ -45,6 +83,24 @@ spec:
         enabled: true
         type: ClusterIP
         port: 8200
+      auditStorage:
+        enabled: false
+    injector:
+      enabled: true
+      extraEnvironmentVars:
+        AGENT_INJECT_VAULT_ADDR: https://vault.vault.svc.cluster.local:8200
+    global:
+      podSecurityPolicy:
+        enabled: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10000
+        readOnlyRootFilesystem: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+        seccompProfile:
+          type: RuntimeDefault
     resources:
       requests:
         cpu: 100m
