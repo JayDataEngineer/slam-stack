@@ -3,7 +3,10 @@
 # No user identifiers whatsoever, metadata-minimizing protocol
 # SMP relay: message queue (Haskell, ~50-80MB RAM)
 # XFTP relay: file transfers (~50-80MB RAM)
-# Install: kubectl apply -f install.yaml (via deploy.sh)
+#
+# Required secrets (create before deploy):
+#   kubectl create secret generic smp-server-auth -n comms \
+#     --from-literal=password=$(openssl rand -base64 32 | tr -d '\n')
 #
 # After first deploy, get the SMP fingerprint:
 #   kubectl logs -n comms smp-server-<pod> | grep "Fingerprint"
@@ -35,19 +38,6 @@ data:
     enable: on
     host: 0.0.0.0
     port: 443
----
-# === SMP Queue Creation Password ===
-apiVersion: v1
-kind: Secret
-metadata:
-  name: smp-server-auth
-  namespace: comms
-type: Opaque
-stringData:
-  # Generate with: openssl rand -base64 32 | tr -d '\n'
-  # This password is required to create new message queues,
-  # preventing unauthorized use of your relay.
-  password: "REPLACE-ME-BEFORE-DEPLOY"
 ---
 # === SMP Server State ===
 apiVersion: v1

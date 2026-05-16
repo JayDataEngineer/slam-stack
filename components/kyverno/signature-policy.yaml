@@ -1,29 +1,5 @@
-# Slam Stack — Image Signature Enforcement
-# deploy.sh injects the actual Cosign public key into this template.
----
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
-metadata:
-  name: require-image-signature
-spec:
-  validationFailureAction: Enforce
-  background: true
-  rules:
-    - name: verify-cosign-signature
-      match:
-        any:
-          - resources:
-              kinds:
-                - Pod
-      verifyImages:
-        - image: "*"
-          key: |-
-            -----BEGIN PUBLIC KEY-----
-            MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQDQgAE...REPLACE_ME...
-            -----END PUBLIC KEY-----
-          mutateDigest: true
-          verifyDigest: true
-          required: true
+# Slam Stack — Pod Security & Resource Policies (Kyverno)
+# Image signature enforcement is added post-bootstrap after Cosign key generation.
 ---
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy

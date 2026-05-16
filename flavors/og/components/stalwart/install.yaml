@@ -1,6 +1,13 @@
 # Slam Stack — Stalwart Mail Server (raw manifests)
 # All-in-one Rust mail server (SMTP + JMAP, no IMAP)
 # No official Helm chart exists — deployed via raw K8s manifests
+#
+# Required secrets (create before deploy):
+#   kubectl create secret generic stalwart-oidc -n mail \
+#     --from-literal=client-secret=<FROM_KANIDM>
+#   openssl genrsa -out dkim-private.pem 2048
+#   kubectl create secret generic stalwart-dkim -n mail \
+#     --from-file=private.pem=dkim-private.pem
 ---
 apiVersion: v1
 kind: Namespace
@@ -19,32 +26,6 @@ spec:
   resources:
     requests:
       storage: 50Gi
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: stalwart-oidc
-  namespace: mail
-type: Opaque
-stringData:
-  # Create via: kubectl create secret generic stalwart-oidc
-  #   -n mail --from-literal=client-secret=<FROM_KANIDM>
-  # See: components/kanidm/oauth2-client.yaml
-  client-secret: "REPLACE-ME-BEFORE-DEPLOY"
----
-# DKIM signing key — generate with:
-#   openssl genrsa -out dkim-private.pem 2048
-#   openssl rsa -in dkim-private.pem -pubout -out dkim-public.pem
-# Then: kubectl create secret generic stalwart-dkim
-#   -n mail --from-file=private.pem=dkim-private.pem
-apiVersion: v1
-kind: Secret
-metadata:
-  name: stalwart-dkim
-  namespace: mail
-type: Opaque
-stringData:
-  private.pem: "REPLACE-ME-BEFORE-DEPLOY"
 ---
 apiVersion: v1
 kind: ConfigMap
