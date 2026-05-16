@@ -1,12 +1,5 @@
-# Slam Stack — Backup RBAC
-# Minimal permissions for the backup CronJob
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: backup-runner
-  namespace: backup
-automountServiceAccountToken: false
+# Slam Stack — Backup Secrets
+# ServiceAccount is in kyverno/service-accounts.yaml
 ---
 apiVersion: v1
 kind: Secret
@@ -15,6 +8,5 @@ metadata:
   namespace: backup
 type: Opaque
 data:
-  # Cosign signing key — copy from components/cosign/
   cosign.key: ""
   cosign.pub: ""
