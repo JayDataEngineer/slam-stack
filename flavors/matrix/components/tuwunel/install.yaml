@@ -1,11 +1,7 @@
 # Slam Stack — Tuwunel Matrix Homeserver (Rust)
 # Lightweight Matrix homeserver, successor to Conduit/Conduwuit.
-# Auth: password + registration tokens (no OIDC).
-# First registered user becomes admin.
-#
-# Image: ghcr.io/matrix-construct/tuwunel
-# Ports: 8008 (client API), 8448 (federation)
-# Data:  /var/lib/tuwunel
+# Auth: OIDC via Kanidm (MSC3861), fallback registration token for bootstrap.
+# Config: conduwuit-style [global] + top-level [oauth2] section
 ---
 apiVersion: v1
 kind: Namespace
@@ -21,37 +17,20 @@ data:
   tuwunel.toml: |
     [global]
     server_name = "slamstack.internal"
-    # Federation disabled for private invite-only deployment
-    allow_federation = false
-    allow_public_registration = false
-    registration_tokens = ["changeme-please-use-a-real-token"]
-    # Trust any reverse proxy (Cinny/Caddy/nginx)
-    trusted_servers = ["0.0.0.0/0", "::/0"]
-
-    [network]
-    # Client API port (internal, behind Cinny/Caddy reverse proxy)
+    address = ["0.0.0.0"]
     port = 8008
-    # Federation port (disabled, but leave configured)
-    federation_port = 8448
-    # Bind all interfaces inside the pod
-    bind = "0.0.0.0"
+    allow_federation = false
+    allow_registration = true
+    registration_token = "changeme-please-use-a-real-token"
+    database_path = "/var/lib/tuwunel"
+    log = "warn"
 
-    [database]
-    # RocksDB backend — lightweight, no Postgres needed
-    backend = "rocksdb"
-    path = "/var/lib/tuwunel"
-
-    [logging]
-    level = "warn"
-    targets = ["stdout"]
-
-    [sso]
-    # SSO/OIDC not supported by Tuwunel.
-    # Use password auth + registration tokens for invite-only access.
-    enabled = false
-
-    [rageshake]
-    enabled = false
+    [oauth2]
+    enabled = true
+    issuer = "https://kanidm.identity.svc.cluster.local/oauth2/openid/tuwunel"
+    client_id = "tuwunel"
+    client_secret_file = "/etc/tuwunel/oidc/oidc_client_secret"
+    scopes = ["openid", "profile", "email"]
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -85,6 +64,7 @@ spec:
         app: tuwunel
     spec:
       serviceAccountName: tuwunel
+      enableServiceLinks: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 10000
@@ -104,19 +84,15 @@ spec:
             - containerPort: 8448
               name: federation
               protocol: TCP
-          env:
-            - name: TUWUNEL_PASSPHRASE
-              valueFrom:
-                secretKeyRef:
-                  name: tuwunel-secrets
-                  key: passphrase
-                  optional: true
           volumeMounts:
             - name: config
               mountPath: /etc/tuwunel
               readOnly: true
             - name: data
               mountPath: /var/lib/tuwunel
+            - name: oidc
+              mountPath: /etc/tuwunel/oidc
+              readOnly: true
           resources:
             requests:
               cpu: 100m
@@ -143,6 +119,9 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: tuwunel-data
+        - name: oidc
+          secret:
+            secretName: tuwunel-oidc
 ---
 apiVersion: v1
 kind: Service
@@ -165,16 +144,5 @@ spec:
   selector:
     app: tuwunel
 ---
-# Secret for registration tokens, passphrases, etc.
-# On first deploy, `kubectl create secret generic tuwunel-secrets -n matrix ...`
-# For now, registration token is in ConfigMap (dev only).
-# In production, use Vault dynamic secrets or SOPS-encrypted secret.
-apiVersion: v1
-kind: Secret
-metadata:
-  name: tuwunel-secrets
-  namespace: matrix
-type: Opaque
-stringData:
-  # See runbook.md for registration token setup
-  registration-token: "changeme"
+# tuwunel-oidc secret is created by the OAuth2 client registration
+# script in flavors/matrix/policies/oauth2-client.yaml

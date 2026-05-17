@@ -1,6 +1,7 @@
-# Slam Stack — Kanidm Identity Provider (raw manifests)
-# Rust-based IDP with mandatory WebAuthn/Passkeys
-# No official Helm chart exists — deployed via raw K8s manifests
+# Slam Stack — Kanidm Identity Provider
+# Rust-based IDP with WebAuthn/Passkeys + OAuth2/OIDC
+# No official Helm chart — deployed via raw K8s manifests
+# Config: flat TOML (Kanidm does not support sectioned config)
 ---
 apiVersion: v1
 kind: Namespace
@@ -15,7 +16,6 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: mayastor
   resources:
     requests:
       storage: 10Gi
@@ -27,56 +27,16 @@ metadata:
   namespace: identity
 data:
   kanidm.toml: |
-    # Kanidm server config
-    # TLS is mandatory — Kanidm refuses to start without it
+    # Kanidm uses flat TOML — no [section] blocks supported
     bindaddress = "0.0.0.0:443"
     ldapbindaddress = "0.0.0.0:636"
     trust_x_forward_for = true
-
-    [tls]
-    chain = "/etc/kanidm/tls/tls.crt"
-    key = "/etc/kanidm/tls/tls.key"
-
-    [database]
-    path = "/data/kanidm.db"
-    # SQLite backend — sufficient for small deployments
-    # For HA, configure PostgreSQL backend instead
-
-    [domain]
-    path = "/data/kanidm"
-    # Change this to your actual domain
-    name = "slamstack.internal"
-
-    [oauth2]
-    enabled = true
-    access_token_expiry_secs = 300
-    refresh_token_expiry_secs = 86400
-
-    [webauthn]
-    enabled = true
-    # Require hardware-backed attestation for admin accounts
-    attestation_trust_store = "/etc/kanidm/webauthn"
-
-    [auth]
-    password_only = false
-
-    [ldap]
-    enabled = true
-    tls = true
-    # Restrict LDAP bind to service accounts only
-    # Human users must use WebAuthn via HTTPS
-    allow_password_auth = false
-
-    [audit]
-    enabled = true
-    path = "/var/log/kanidm/audit.log"
-    # Forward to VictoriaLogs
-    remote = "tcp://victoria-logs.observability.svc.cluster.local:8480"
-
-    [rate_limit]
-    enabled = true
-    max_bad_password_attempts = 3
-    lockout_duration_secs = 3600
+    tls_chain = "/etc/kanidm/tls/tls.crt"
+    tls_key = "/etc/kanidm/tls/tls.key"
+    db_path = "/data/kanidm.db"
+    domain = "identity.svc.cluster.local"
+    origin = "https://kanidm.identity.svc.cluster.local"
+    log_level = "info"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -101,11 +61,10 @@ spec:
         fsGroup: 10000
       containers:
         - name: kanidm
-          image: ghcr.io/kanidm/kanidm:latest
-          args:
-            - server
-            - -c
-            - /etc/kanidm/kanidm.toml
+          image: kanidm/server:latest
+          env:
+            - name: KANIDM_CONFIG
+              value: "/etc/kanidm/kanidm.toml"
           ports:
             - containerPort: 443
               name: https
@@ -136,14 +95,14 @@ spec:
               memory: 256Mi
           livenessProbe:
             httpGet:
-              path: /health/ready
+              path: /status
               port: 443
               scheme: HTTPS
             initialDelaySeconds: 30
             periodSeconds: 30
           readinessProbe:
             httpGet:
-              path: /health/ready
+              path: /status
               port: 443
               scheme: HTTPS
             initialDelaySeconds: 10

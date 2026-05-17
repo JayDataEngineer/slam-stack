@@ -4,3 +4,4 @@ resources:
   - service-accounts.yaml
   - certificates.yaml
   - cilium-service-policies.yaml
+  - oauth2-client.yaml
