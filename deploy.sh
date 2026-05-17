@@ -80,6 +80,11 @@ case "$FLAVOR" in
     DEPLOY["livekit"]="raw|livekit||matrix|${FLAVOR_DIR}/components/livekit/install.yaml"
     ORDER+=(tuwunel cinny livekit)
     ;;
+  commet)
+    DEPLOY["tuwunel"]="raw|tuwunel||matrix|${SCRIPT_DIR}/flavors/matrix/components/tuwunel/install.yaml"
+    DEPLOY["commet"]="raw|commet||matrix|${FLAVOR_DIR}/components/commet/install.yaml"
+    ORDER+=(tuwunel commet)
+    ;;
 esac
 
 # === Cosign key management ===
@@ -328,6 +333,10 @@ case "$FLAVOR" in
     echo "  tuwunel (raw)"
     echo "  cinny (raw)"
     echo "  livekit (raw)"
+    ;;
+  commet)
+    echo "  tuwunel (raw)"
+    echo "  commet (raw)"
     ;;
 esac
 echo ""

@@ -1,0 +1,8 @@
+# Slam Stack — Commet Flavor
+# Tuwunel + Commet (Flutter Matrix client) + Kanidm OIDC
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../matrix/components/tuwunel
+  - components/commet
+  - policies

@@ -1,0 +1,158 @@
+# Slam Stack — Commet Matrix Client (Flutter Web)
+# Cross-platform Matrix client built with Dart/Flutter.
+# No official Docker image — uses init container to fetch release tarball.
+#
+# Releases: https://github.com/commetchat/commet/releases
+# Port: 80 (nginx static file server)
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: commet-nginx
+  namespace: matrix
+data:
+  default.conf: |
+    server {
+      listen 80;
+      root /usr/share/nginx/html;
+      index index.html;
+
+      add_header Cross-Origin-Opener-Policy same-origin always;
+      add_header Cross-Origin-Embedder-Policy require-corp always;
+
+      location / {
+        try_files $uri $uri/ /index.html;
+      }
+
+      location /health {
+        add_header Cross-Origin-Opener-Policy same-origin always;
+        add_header Cross-Origin-Embedder-Policy require-corp always;
+        return 200 "ok";
+      }
+
+      location ~* \.wasm$ {
+        add_header Cross-Origin-Opener-Policy same-origin always;
+        add_header Cross-Origin-Embedder-Policy require-corp always;
+        add_header Cross-Origin-Resource-Policy cross-origin always;
+        types { application/wasm wasm; }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: commet
+  namespace: matrix
+  labels:
+    app: commet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: commet
+  template:
+    metadata:
+      labels:
+        app: commet
+    spec:
+      serviceAccountName: commet
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+      initContainers:
+        - name: fetch-commet
+          image: curlimages/curl:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          command:
+            - sh
+            - -c
+            - |
+              cd /html
+              echo "Downloading Commet web release..."
+              curl -fSL -o commet-web.tar.gz \
+                "https://github.com/commetchat/commet/releases/download/v0.4.2%2Bhotfix.2/commet-web.tar.gz"
+              tar xzf commet-web.tar.gz --strip-components=1
+              rm commet-web.tar.gz
+              echo "Done. Files:"
+              ls -la
+          volumeMounts:
+            - name: web-root
+              mountPath: /html
+      containers:
+        - name: commet
+          image: nginx:alpine
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          ports:
+            - containerPort: 80
+              name: http
+              protocol: TCP
+          volumeMounts:
+            - name: web-root
+              mountPath: /usr/share/nginx/html
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /run
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: web-root
+          emptyDir: {}
+        - name: nginx-config
+          configMap:
+            name: commet-nginx
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: commet
+  namespace: matrix
+  labels:
+    app: commet
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
+  selector:
+    app: commet

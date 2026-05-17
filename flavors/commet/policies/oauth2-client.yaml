@@ -1,0 +1,44 @@
+# Slam Stack (Commet Flavor) — Kanidm OAuth2 Client Registration
+# Registers Tuwunel as an OAuth2 client in Kanidm for MSC3861 OIDC.
+# Same as matrix flavor — Tuwunel is the homeserver, Commet is just the client.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kanidm-oauth2-setup-commet
+  namespace: identity
+data:
+  01-create-tuwunel-client.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    echo "=== Creating OAuth2 client for Tuwunel ==="
+    kubectl exec -n identity kanidm-0 -- \
+      kanidm system oauth2 create \
+        --displayname "Tuwunel Matrix Homeserver" \
+        --origin "https://matrix.slamstack.internal" \
+        tuwunel
+    echo ""
+    echo "Getting client secret..."
+    TUWUNEL_SECRET=$(kubectl exec -n identity kanidm-0 -- \
+      kanidm system oauth2 show-basic-secret tuwunel 2>/dev/null | tail -1)
+    echo ""
+    echo "Creating K8s secret for Tuwunel..."
+    kubectl create secret generic tuwunel-oidc \
+      -n matrix \
+      --from-literal=oidc_client_secret="$TUWUNEL_SECRET" \
+      --dry-run=client -o yaml | kubectl apply -f -
+
+    echo "Enabling scopes for Tuwunel..."
+    kubectl exec -n identity kanidm-0 -- \
+      kanidm system oauth2 update-scope-map \
+        tuwunel \
+        --name openid --name profile --name email \
+        idm_all_persons
+    echo "Tuwunel OAuth2 client configured."
+
+  setup-commet.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    echo "=== Setting up Commet flavor OAuth2 clients ==="
+    bash /data/01-create-tuwunel-client.sh
+    echo "Commet flavor OAuth2 setup complete"

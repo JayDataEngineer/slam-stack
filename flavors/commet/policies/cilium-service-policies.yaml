@@ -1,0 +1,89 @@
+# Slam Stack (Commet Flavor) — Service-Specific Network Policies
+---
+# === Allow traffic to Tuwunel (Matrix homeserver) ===
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-to-tuwunel
+  namespace: matrix
+spec:
+  endpointSelector:
+    matchLabels:
+      app: tuwunel
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app: commet
+            "k8s:io.kubernetes.pod.namespace": matrix
+      toPorts:
+        - ports:
+            - port: "8008"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": network
+      toPorts:
+        - ports:
+            - port: "8008"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": observability
+            app: victoria-logs
+      toPorts:
+        - ports:
+            - port: "8480"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+---
+# === Allow traffic to Commet (web UI) ===
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-to-commet
+  namespace: matrix
+spec:
+  endpointSelector:
+    matchLabels:
+      app: commet
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": network
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": matrix
+            app: tuwunel
+      toPorts:
+        - ports:
+            - port: "8008"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": observability
+            app: victoria-logs
+      toPorts:
+        - ports:
+            - port: "8480"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP

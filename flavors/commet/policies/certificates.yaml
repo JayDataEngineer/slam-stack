@@ -1,0 +1,25 @@
+# Slam Stack (Commet Flavor) — TLS Certificates
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: matrix-tls
+  namespace: matrix
+spec:
+  secretName: matrix-tls
+  duration: 720h
+  renewBefore: 168h
+  issuerRef:
+    name: vault-pki-issuer
+    kind: ClusterIssuer
+  dnsNames:
+    - matrix.slamstack.internal
+    - commet.matrix
+    - commet.matrix.svc.cluster.local
+    - tuwunel.matrix
+    - tuwunel.matrix.svc.cluster.local
+  usages:
+    - server auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
