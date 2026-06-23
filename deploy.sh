@@ -67,8 +67,15 @@ declare -A DEPLOY=(
 
 ORDER=(cilium kyverno tetragon victoria-logs victoria-metrics vault cert-manager mayastor cnpg postgres registry kanidm headscale rustfs web backup)
 
-# === Flavor-specific components ===
+# === Flavor-specific components + overrides ===
 case "$FLAVOR" in
+  minimal)
+    # Ultra-minimalist: drop storage, DB, observability, registry, web, backup.
+    # Keep only the zero-trust security plane: Cilium + Kyverno +
+    # cert-manager + Vault + Kanidm + Headscale (~2.3 Gi RAM).
+    info "Minimal flavor: deploying security plane only"
+    ORDER=(cilium kyverno cert-manager vault kanidm headscale)
+    ;;
   og)
     DEPLOY["stalwart"]="raw|stalwart||mail|${FLAVOR_DIR}/components/stalwart/install.yaml"
     DEPLOY["simplex"]="raw|simplex||comms|${FLAVOR_DIR}/components/simplex/install.yaml"
@@ -84,6 +91,12 @@ case "$FLAVOR" in
     DEPLOY["tuwunel"]="raw|tuwunel||matrix|${SCRIPT_DIR}/flavors/matrix/components/tuwunel/install.yaml"
     DEPLOY["commet"]="raw|commet||matrix|${FLAVOR_DIR}/components/commet/install.yaml"
     ORDER+=(tuwunel commet)
+    ;;
+  rust)
+    # Pure-Rust backends: Stalwart (mail) + Tuwunel (Matrix).
+    DEPLOY["stalwart"]="raw|stalwart||mail|${SCRIPT_DIR}/flavors/og/components/stalwart/install.yaml"
+    DEPLOY["tuwunel"]="raw|tuwunel||matrix|${SCRIPT_DIR}/flavors/matrix/components/tuwunel/install.yaml"
+    ORDER+=(stalwart tuwunel)
     ;;
 esac
 
@@ -316,12 +329,18 @@ fi
 echo ""
 info "Components installed (flavor: $FLAVOR):"
 helm list -A 2>/dev/null | tail -n +2 | awk '{printf "  %-20s %-15s %s\n", $1, $9, $8}'
-echo "  cnpg (operator)"
-echo "  postgres (raw)"
-echo "  kanidm (raw)"
-echo "  registry (raw)"
-echo "  rustfs (raw)"
-echo "  web (raw)"
+
+# Core raw components (skipped for minimal)
+if [ "$FLAVOR" != "minimal" ]; then
+  echo "  cnpg (operator)"
+  echo "  postgres (raw)"
+  echo "  kanidm (raw)"
+  echo "  registry (raw)"
+  echo "  rustfs (raw)"
+  echo "  web (raw)"
+else
+  echo "  kanidm (raw)"
+fi
 
 # Flavor-specific raw components
 case "$FLAVOR" in
@@ -337,6 +356,10 @@ case "$FLAVOR" in
   commet)
     echo "  tuwunel (raw)"
     echo "  commet (raw)"
+    ;;
+  rust)
+    echo "  stalwart (raw, Rust)"
+    echo "  tuwunel (raw, Rust)"
     ;;
 esac
 echo ""

@@ -1,7 +1,7 @@
 # Slam Stack — Makefile
 # Convenience targets for common operations.
 # ./bootstrap.sh is the canonical "from scratch" entry point.
-# Set FLAVOR=og|matrix|core to select flavor (default: og).
+# Set FLAVOR=minimal|core|og|matrix|commet|rust to select flavor (default: og).
 
 SHELL := /bin/bash
 KUBECONFIG := $(HOME)/.kube/slam-stack-config
@@ -20,38 +20,61 @@ DOMAIN ?= slam.lab
 INSTALL_DISK ?= /dev/sda
 GIT_REPO_URL ?= $(shell git remote get-url origin 2>/dev/null || echo "https://github.com/your-org/slam-stack.git")
 GIT_BRANCH ?= master
+CREATE_VMS ?=
 
-.PHONY: all bootstrap bootstrap-og bootstrap-matrix setup deploy deploy-og deploy-matrix deploy-core verify web web-push sign clean cluster destroy tofu-* help
+.PHONY: all bootstrap bootstrap-minimal bootstrap-og bootstrap-matrix bootstrap-rust setup \
+        deploy deploy-minimal deploy-og deploy-matrix deploy-core deploy-rust deploy-commet \
+        verify e2e e2e-flux e2e-matrix web web-push sign clean cluster destroy tofu-* help
 
 all: help
 
-## bootstrap — Full repro from scratch (Ubuntu 26.04 host, FLAVOR=og)
+## bootstrap — Full repro from scratch (FLAVOR=og by default)
 bootstrap:
 	FLAVOR=$(FLAVOR) ./bootstrap.sh
+
+## bootstrap-minimal — Full repro with minimal flavor (security plane only, ~2 GiB)
+bootstrap-minimal:
+	FLAVOR=minimal ./bootstrap.sh
 
 ## bootstrap-og — Full repro with OG flavor (Stalwart + SimpleX)
 bootstrap-og:
 	FLAVOR=og ./bootstrap.sh
 
-## bootstrap-matrix — Full repro with Matrix flavor (Continuwuity + Cinny + LiveKit)
+## bootstrap-matrix — Full repro with Matrix flavor (Tuwunel + Cinny + LiveKit)
 bootstrap-matrix:
 	FLAVOR=matrix ./bootstrap.sh
+
+## bootstrap-rust — Full repro with rust flavor (Stalwart + Tuwunel, both Rust)
+bootstrap-rust:
+	FLAVOR=rust ./bootstrap.sh
 
 ## setup — Create dev cluster + Cilium only
 setup:
 	./dev/setup.sh
 
-## deploy — Deploy all stack components (FLAVOR=og)
+## deploy — Deploy all stack components (current FLAVOR)
 deploy:
 	FLAVOR=$(FLAVOR) KUBECONFIG=$(KUBECONFIG) ./deploy.sh
+
+## deploy-minimal — Deploy minimal flavor (Cilium + Kyverno + cert-manager + Vault + Kanidm + Headscale)
+deploy-minimal:
+	FLAVOR=minimal KUBECONFIG=$(KUBECONFIG) ./deploy.sh
 
 ## deploy-og — Deploy OG flavor (Stalwart + SimpleX)
 deploy-og:
 	FLAVOR=og KUBECONFIG=$(KUBECONFIG) ./deploy.sh
 
-## deploy-matrix — Deploy Matrix flavor (Continuwuity + Cinny + LiveKit)
+## deploy-matrix — Deploy Matrix flavor (Tuwunel + Cinny + LiveKit)
 deploy-matrix:
 	FLAVOR=matrix KUBECONFIG=$(KUBECONFIG) ./deploy.sh
+
+## deploy-rust — Deploy Rust flavor (Stalwart + Tuwunel — both Rust servers)
+deploy-rust:
+	FLAVOR=rust KUBECONFIG=$(KUBECONFIG) ./deploy.sh
+
+## deploy-commet — Deploy Commet flavor (Tuwunel + Commet Flutter client)
+deploy-commet:
+	FLAVOR=commet KUBECONFIG=$(KUBECONFIG) ./deploy.sh
 
 ## deploy-core — Deploy only core (no flavor apps)
 deploy-core:
@@ -61,13 +84,22 @@ deploy-core:
 verify:
 	FLAVOR=$(FLAVOR) KUBECONFIG=$(KUBECONFIG) ./verify.sh
 
-## e2e-matrix — Run Matrix flavor end-to-end tests
+## e2e — Run flavor-specific e2e tests (if it exists)
+e2e:
+	@if [ -f "./scripts/e2e-$(FLAVOR).sh" ]; then \
+		FLAVOR=$(FLAVOR) KUBECONFIG=$(KUBECONFIG) ./scripts/e2e-$(FLAVOR).sh; \
+	else \
+		echo "No e2e-$(FLAVOR).sh — running e2e-flux.sh (cluster-offline pipeline check)"; \
+		FLAVOR=$(FLAVOR) ./scripts/e2e-flux.sh; \
+	fi
+
+## e2e-flux — Flux pipeline build/lint/policy checks (no cluster needed)
+e2e-flux:
+	FLAVOR=$(FLAVOR) ./scripts/e2e-flux.sh
+
+## e2e-matrix — Matrix flavor end-to-end live cluster test
 e2e-matrix:
 	FLAVOR=matrix KUBECONFIG=$(KUBECONFIG) ./scripts/e2e-matrix.sh
-
-## e2e — Run flavor-specific e2e tests
-e2e:
-	FLAVOR=$(FLAVOR) KUBECONFIG=$(KUBECONFIG) ./scripts/e2e-$(FLAVOR).sh
 
 ## web — Build web dashboard (requires Rust)
 web:
@@ -86,11 +118,17 @@ sign:
 	done
 	@echo "All scripts signed"
 
-tofu_vars = $(if $(NODE_IP), \
-  -var="node_ip=$(NODE_IP)" -var="domain=$(DOMAIN)" \
+# Either NODE_IP (existing Talos node) or CREATE_VMS=true (libvirt module) must be set.
+tofu_vars = $(if $(CREATE_VMS), \
+  -var="create_vms=true" -var="domain=$(DOMAIN)" \
   -var="flavor=$(FLAVOR)" -var="install_disk=$(INSTALL_DISK)" \
   -var="git_repo_url=$(GIT_REPO_URL)" -var="git_branch=$(GIT_BRANCH)", \
-  $(error Set NODE_IP: export NODE_IP=192.168.1.100))
+  $(if $(NODE_IP), \
+    -var="node_ip=$(NODE_IP)" -var="domain=$(DOMAIN)" \
+    -var="flavor=$(FLAVOR)" -var="install_disk=$(INSTALL_DISK)" \
+    -var="git_repo_url=$(GIT_REPO_URL)" -var="git_branch=$(GIT_BRANCH)", \
+    $(error Set NODE_IP (existing Talos node) or CREATE_VMS=true (libvirt provisioner): \
+      export NODE_IP=192.168.1.100)))
 
 ## tofu-init — Initialize OpenTofu working directory (via container)
 tofu-init:

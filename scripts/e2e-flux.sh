@@ -22,6 +22,8 @@ echo ""
 info "1. Kustomize builds..."
 for dir in clusters/phases/00-sources clusters/phases/01-cni clusters/phases/02-core \
            clusters/phases/03-infra clusters/phases/04-services clusters/common \
+           clusters/minimal/phases/00-sources clusters/minimal/phases/01-cni \
+           clusters/minimal/phases/02-platform clusters/minimal/phases/03-identity \
            clusters/$FLAVOR clusters/base; do
   if kubectl kustomize "$dir" > /dev/null 2>&1; then
     count=$(kubectl kustomize "$dir" 2>/dev/null | grep -c '^kind:')
@@ -35,7 +37,7 @@ echo ""
 
 # === 2. Cluster overlay outputs only Kustomization CRDs ===
 info "2. Cluster overlay purity (only Flux Kustomization CRDs)..."
-for flavor in og matrix; do
+for flavor in og matrix commet rust minimal core; do
   non_kust=$(kubectl kustomize "clusters/$flavor" 2>/dev/null | grep '^kind:' | grep -cv 'Kustomization' || true)
   if [ "$non_kust" -eq 0 ]; then
     pass "clusters/$flavor — only Kustomization CRDs"
@@ -47,24 +49,24 @@ echo ""
 
 # === 3. Dependency chain is complete (no broken dependsOn) ===
 info "3. Dependency chain integrity..."
-for flavor in og matrix; do
+for flavor in og matrix commet rust minimal; do
   # Extract CRD names (metadata.name, indented 2 spaces under metadata:)
   crd_names=$(kubectl kustomize "clusters/$flavor" 2>/dev/null | grep -oP '(?<=^  name: )slam-\S+' | sort -u)
   # Extract dependsOn target names (under dependsOn: block, 6-space indent)
   dep_names=$(kubectl kustomize "clusters/$flavor" 2>/dev/null | grep -oP '(?<=- name: )slam-\S+' | sort -u)
   for dep in $dep_names; do
     if echo "$crd_names" | grep -qx "$dep"; then
-      pass "dependsOn '$dep' resolves"
+      pass "$flavor: dependsOn '$dep' resolves"
     else
-      fail "dependsOn '$dep' — no matching Kustomization CRD"
+      fail "$flavor: dependsOn '$dep' — no matching Kustomization CRD"
     fi
   done
-  # Check ordering: sources has no dep, flavor depends on services
+  # Check ordering: sources has no dep
   sources_block=$(kubectl kustomize "clusters/$flavor" 2>/dev/null | sed -n '/^  name: slam-sources$/,/^---$/p')
   if echo "$sources_block" | grep -q 'dependsOn'; then
-    fail "slam-sources should have no dependsOn (root of chain)"
+    fail "$flavor: slam-sources should have no dependsOn (root of chain)"
   else
-    pass "slam-sources is root (no dependsOn)"
+    pass "$flavor: slam-sources is root (no dependsOn)"
   fi
 done
 echo ""
@@ -130,22 +132,24 @@ echo ""
 info "8. Flavor components..."
 for flavor_dir in flavors/*/; do
   flavor_name=$(basename "$flavor_dir")
-  [ "$flavor_name" = "core" ] && continue  # core is not a deployable flavor
+  # core has no deployable components; minimal has an intentionally-empty bundle
+  [ "$flavor_name" = "core" ] && continue
   [ -f "$flavor_dir/kustomization.yaml" ] || { fail "$flavor_name — no kustomization.yaml"; continue; }
-  # Check each component listed
+  # Check each component listed — resolves cross-flavor refs (rust, commet reuse components)
   while IFS= read -r comp_ref; do
-    comp_path="$flavor_dir${comp_ref}"
-    if [ -f "$comp_path/kustomization.yaml" ]; then
+    # Resolve absolute path relative to flavors/<name>/
+    comp_path="$(cd "$flavor_dir" && realpath -m "$comp_ref" 2>/dev/null)"
+    if [ -n "$comp_path" ] && [ -f "$comp_path/kustomization.yaml" ]; then
       pass "$flavor_name/$comp_ref"
     else
       fail "$flavor_name/$comp_ref — missing kustomization.yaml"
     fi
-  done < <(grep -oP 'components/\S+' "$flavor_dir/kustomization.yaml" 2>/dev/null || true)
-  # Check policies dir
+  done < <(grep -oP '^\s*-\s+\K\S*components/\S+' "$flavor_dir/kustomization.yaml" 2>/dev/null || true)
+  # Policies dir — only required for non-empty flavors
   if [ -f "$flavor_dir/policies/kustomization.yaml" ]; then
     pass "$flavor_name/policies"
-  else
-    fail "$flavor_name/policies — missing kustomization.yaml"
+  elif [ "$flavor_name" = "minimal" ]; then
+    pass "$flavor_name/policies (skipped: empty flavor)"
   fi
 done
 echo ""

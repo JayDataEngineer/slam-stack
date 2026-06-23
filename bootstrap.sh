@@ -135,6 +135,9 @@ echo "    PostgreSQL (CNPG managed)"
 echo "    Registry (local container registry)"
 echo "    Web dashboard (Leptos + Axum)"
 case "$FLAVOR" in
+  minimal)
+    echo "    (Minimal flavor — security plane only, no apps)"
+    ;;
   og)
     echo "    Stalwart (JMAP email)"
     echo "    SimpleX Chat (SMP + XFTP relay)"
@@ -143,6 +146,14 @@ case "$FLAVOR" in
     echo "    Matrix (Continuwuity/Tuwunel)"
     echo "    Cinny (Discord-like web UI)"
     echo "    LiveKit (E2EE voice/video)"
+    ;;
+  commet)
+    echo "    Matrix (Continuwuity/Tuwunel)"
+    echo "    Commet (Flutter Matrix client)"
+    ;;
+  rust)
+    echo "    Stalwart (Rust mail server)"
+    echo "    Tuwunel (Rust Matrix homeserver)"
     ;;
 esac
 echo ""
