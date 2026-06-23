@@ -122,17 +122,17 @@ mkdir -p ~/.kube
 sudo talosctl --talosconfig /root/.talos/config --nodes 10.5.0.2 kubeconfig /tmp/slam-kubeconfig --merge=false
 
 # Fix: use server cert as CA & connect directly to VM
-SERVER_CA=\$(echo | timeout 5 openssl s_client -connect 10.5.0.2:6443 -showcerts 2>/dev/null | timeout 5 openssl x509 2>/dev/null | base64 | tr -d '\n')
-sudo python3 -c \"
+SERVER_CA=$(echo | timeout 5 openssl s_client -connect 10.5.0.2:6443 -showcerts 2>/dev/null | timeout 5 openssl x509 2>/dev/null | base64 | tr -d '\n')
+sudo python3 -c "
 import yaml
 with open('/tmp/slam-kubeconfig') as f:
     d = yaml.safe_load(f)
-d['clusters'][0]['cluster']['certificate-authority-data'] = '\${SERVER_CA}'
+d['clusters'][0]['cluster']['certificate-authority-data'] = '${SERVER_CA}'
 d['clusters'][0]['cluster']['server'] = 'https://10.5.0.2:6443'
-with open('\${HOME}/.kube/slam-stack-config', 'w') as f:
+with open('${HOME}/.kube/slam-stack-config', 'w') as f:
     yaml.dump(d, f)
-\"
-sudo chown \$(id -u):\$(id -g) ~/.kube/slam-stack-config
+"
+sudo chown $(id -u):$(id -g) ~/.kube/slam-stack-config
 ok "Kubeconfig: ~/.kube/slam-stack-config"
 
 export KUBECONFIG=~/.kube/slam-stack-config
