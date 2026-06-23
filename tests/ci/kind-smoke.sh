@@ -105,7 +105,7 @@ export KUBECONFIG="${HOME}/.kube/config"
 kind get kubeconfig --name "$CLUSTER_NAME" > "$KUBECONFIG"
 
 info "Waiting for control-plane to be Ready..."
-kubectl wait --for=condition=Ready nodes --timeout=120s
+kubectl wait --for=condition=Ready node --all --timeout=120s
 pass "Kind cluster ready"
 
 # ─── Apply manifests ──────────────────────────────────────────────────────
