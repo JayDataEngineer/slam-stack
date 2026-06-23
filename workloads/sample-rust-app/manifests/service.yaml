@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: sample-rust-app
+  namespace: sample-app
+spec:
+  selector:
+    app: sample-rust-app
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sample-rust-app
+  namespace: sample-app
+  labels:
+    app: sample-rust-app
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: sample-rust-app
+  template:
+    metadata:
+      labels:
+        app: sample-rust-app
+      annotations:
+        # Cosign verification hint — Kyverno will reject if the image isn't signed
+        slam-stack.io/verify-signature: "true"
+    spec:
+      serviceAccountName: sample-rust-app
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: app
+          # Build this image locally and push to the cluster registry:
+          #   docker build -t registry.registry.svc.cluster.local:5000/sample-rust-app:0.1.0 .
+          #   docker push registry.registry.svc.cluster.local:5000/sample-rust-app:0.1.0
+          # Then sign it:
+          #   cosign sign --key components/cosign/cosign.key \
+          #     registry.registry.svc.cluster.local:5000/sample-rust-app:0.1.0
+          image: registry.registry.svc.cluster.local:5000/sample-rust-app:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: LISTEN_ADDR
+              value: "0.0.0.0:8080"
+            - name: RUST_LOG
+              value: "info"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 1
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          securityContext:
+            allowPrivilegeEscalation: false
+            privileged: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
