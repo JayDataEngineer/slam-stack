@@ -1,10 +1,17 @@
 # Slam Stack — OpenTofu variables
 # Copy to terraform.tfvars and fill in your values.
 
-domain      = "slam.lab"
-flavor      = "og"          # core | og | matrix
-node_ip     = "192.168.1.100"
+domain        = "slam.lab"
+flavor        = "og"          # minimal | core | og | matrix | commet | rust
 node_hostname = "slam-node"
-install_disk = "/dev/sda"
-git_repo_url = "https://github.com/your-org/slam-stack.git"
-git_branch   = "master"
+install_disk  = "/dev/sda"
+git_repo_url  = "https://github.com/your-org/slam-stack.git"
+git_branch    = "master"
+
+# ─── Option A: target existing Talos node ──────────────────────────────
+node_ip       = "192.168.1.100"
+
+# ─── Option B: provision libvirt VMs first (the "automated Talos maker") ─
+# create_vms         = true
+# talos_schematic_id = "376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d683354a"
+# boot_mode          = "uefi"   # uefi | uefi-secureboot | bios

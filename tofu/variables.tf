@@ -10,14 +10,20 @@ variable "talos_version" {
   default     = "v1.9"
 }
 
+variable "kubernetes_version" {
+  description = "Kubernetes version baked into the Talos image"
+  type        = string
+  default     = "v1.32.0"
+}
+
 variable "flavor" {
-  description = "Deployment flavor: core, og, or matrix"
+  description = "Deployment flavor: minimal, core, og, matrix, commet, or rust"
   type        = string
   default     = "og"
 
   validation {
-    condition     = contains(["core", "og", "matrix"], var.flavor)
-    error_message = "Flavor must be one of: core, og, matrix."
+    condition     = contains(["minimal", "core", "og", "matrix", "commet", "rust"], var.flavor)
+    error_message = "Flavor must be one of: minimal, core, og, matrix, commet, rust."
   }
 }
 
@@ -28,8 +34,9 @@ variable "domain" {
 }
 
 variable "node_ip" {
-  description = "IP address of the single controlplane node"
+  description = "IP address of the single controlplane node. Optional when create_vms = true (the libvirt module provides it)."
   type        = string
+  default     = null
 }
 
 variable "node_hostname" {
