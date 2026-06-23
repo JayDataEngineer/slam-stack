@@ -1,0 +1,10 @@
+# Slam Stack (Rust Flavor) — Policy bundle
+# TLS certs, network policies, ServiceAccounts, and OAuth2 clients for
+# both Stalwart (mail) and Tuwunel (matrix).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - service-accounts.yaml
+  - certificates.yaml
+  - cilium-service-policies.yaml
+  - oauth2-client.yaml

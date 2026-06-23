@@ -1,0 +1,12 @@
+# Slam Stack — Rust Flavor Cluster Overlay
+# Phase 0–4: common core infrastructure
+# Phase 5 (flavor): stalwart + tuwunel (both Rust)
+#
+# Point Flux bootstrap at this path:
+#   flux bootstrap ... --path=./clusters/rust
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../common
+  - flavor.yaml

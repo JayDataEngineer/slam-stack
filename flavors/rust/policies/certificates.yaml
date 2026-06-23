@@ -1,0 +1,46 @@
+# Slam Stack (Rust Flavor) — TLS Certificates
+# Vault-issued, 30-day duration, 7-day auto-renewal.
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: stalwart-tls
+  namespace: mail
+spec:
+  secretName: stalwart-tls
+  duration: 720h
+  renewBefore: 168h
+  issuerRef:
+    name: vault-pki-issuer
+    kind: ClusterIssuer
+  dnsNames:
+    - stalwart.mail
+    - stalwart.mail.svc.cluster.local
+    - mail.slamstack.internal
+  usages:
+    - server auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: tuwunel-tls
+  namespace: matrix
+spec:
+  secretName: tuwunel-tls
+  duration: 720h
+  renewBefore: 168h
+  issuerRef:
+    name: vault-pki-issuer
+    kind: ClusterIssuer
+  dnsNames:
+    - tuwunel.matrix
+    - tuwunel.matrix.svc.cluster.local
+    - matrix.slamstack.internal
+  usages:
+    - server auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256

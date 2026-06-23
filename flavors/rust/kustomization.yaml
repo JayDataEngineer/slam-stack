@@ -1,0 +1,12 @@
+# Slam Stack — Rust Flavor
+# Pure-Rust backends: Stalwart Mail + Tuwunel Matrix homeserver.
+# Reuses existing components — no duplication, just composition.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  # Stalwart (Rust mail) — reuse from OG flavor
+  - ../og/components/stalwart
+  # Tuwunel (Rust Matrix) — reuse from Matrix flavor
+  - ../matrix/components/tuwunel
+  # Combined policies for both
+  - policies

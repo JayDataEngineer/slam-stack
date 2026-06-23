@@ -1,0 +1,101 @@
+# Slam Stack (Rust Flavor) — Service-Specific Network Policies
+# Default-deny is already cluster-wide; these allow only the minimum
+# traffic required for each service to function.
+---
+# === Stalwart Mail ===
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-to-stalwart
+  namespace: mail
+spec:
+  endpointSelector:
+    matchLabels:
+      app: stalwart
+  ingress:
+    # Headscale mesh → SMTPS (465) + JMAP (443)
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": network
+      toPorts:
+        - ports:
+            - port: "465"
+              protocol: TCP
+            - port: "443"
+              protocol: TCP
+  egress:
+    # DNS
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+    # Kanidm for OIDC
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": identity
+            app: kanidm
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    # Audit log shipping
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": observability
+            app: victoria-logs
+      toPorts:
+        - ports:
+            - port: "8480"
+              protocol: TCP
+---
+# === Tuwunel Matrix ===
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-to-tuwunel
+  namespace: matrix
+spec:
+  endpointSelector:
+    matchLabels:
+      app: tuwunel
+  ingress:
+    # Headscale mesh → Matrix client API (8008)
+    - fromEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": network
+      toPorts:
+        - ports:
+            - port: "8008"
+              protocol: TCP
+  egress:
+    # DNS
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+    # Kanidm for OIDC (MSC3861)
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": identity
+            app: kanidm
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    # Audit log shipping
+    - toEndpoints:
+        - matchLabels:
+            "k8s:io.kubernetes.pod.namespace": observability
+            app: victoria-logs
+      toPorts:
+        - ports:
+            - port: "8480"
+              protocol: TCP

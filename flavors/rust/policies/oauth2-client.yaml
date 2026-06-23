@@ -1,0 +1,61 @@
+# Slam Stack (Rust Flavor) — Kanidm OAuth2 Client Registration
+# Registers Stalwart + Tuwunel as OAuth2 clients in Kanidm.
+# Applied post-deploy via kanidm-setup job.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kanidm-oauth2-setup-rust
+  namespace: identity
+data:
+  01-create-stalwart-client.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    echo "=== Creating OAuth2 client for Stalwart Mail ==="
+    kubectl exec -n identity kanidm-0 -- \
+      kanidm system oauth2 create \
+        --displayname "Stalwart Mail Server" \
+        --origin "https://mail.slamstack.internal" \
+        stalwart
+    STALWART_SECRET=$(kubectl exec -n identity kanidm-0 -- \
+      kanidm system oauth2 show-basic-secret stalwart 2>/dev/null | tail -1)
+    kubectl create secret generic stalwart-oidc \
+      -n mail \
+      --from-literal=client-secret="$STALWART_SECRET" \
+      --dry-run=client -o yaml | kubectl apply -f -
+    kubectl exec -n identity kanidm-0 -- \
+      kanidm system oauth2 update-scope-map \
+        stalwart \
+        --name openid --name profile --name email \
+        idm_all_persons
+    echo "Stalwart OAuth2 client configured."
+
+  02-create-tuwunel-client.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    echo "=== Creating OAuth2 client for Tuwunel ==="
+    kubectl exec -n identity kanidm-0 -- \
+      kanidm system oauth2 create \
+        --displayname "Tuwunel Matrix Homeserver" \
+        --origin "https://matrix.slamstack.internal" \
+        tuwunel
+    TUWUNEL_SECRET=$(kubectl exec -n identity kanidm-0 -- \
+      kanidm system oauth2 show-basic-secret tuwunel 2>/dev/null | tail -1)
+    kubectl create secret generic tuwunel-oidc \
+      -n matrix \
+      --from-literal=oidc_client_secret="$TUWUNEL_SECRET" \
+      --dry-run=client -o yaml | kubectl apply -f -
+    kubectl exec -n identity kanidm-0 -- \
+      kanidm system oauth2 update-scope-map \
+        tuwunel \
+        --name openid --name profile --name email \
+        idm_all_persons
+    echo "Tuwunel OAuth2 client configured."
+
+  setup-rust.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    echo "=== Setting up Rust flavor OAuth2 clients ==="
+    bash /data/01-create-stalwart-client.sh
+    bash /data/02-create-tuwunel-client.sh
+    echo "Rust flavor OAuth2 setup complete"
