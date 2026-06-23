@@ -9,5 +9,19 @@ build.sh.bundle
 _site/
 _out/
 .terraform/
+.terraform.lock.hcl
 *.tfstate
 *.tfstate.backup
+
+# Local VM artifacts (qcow2 images, ISOs, generated configs)
+.flatcar/
+.vm/
+*.qcow2
+*.iso
+*.ign
+
+# OpenTofu module cache
+tofu/modules/talos-vm/.cache/
+
+# Sample workload build artifacts
+workloads/sample-rust-app/target/
