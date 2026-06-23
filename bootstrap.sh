@@ -59,10 +59,10 @@ if command -v ykman >/dev/null 2>&1; then
   if ykman list 2>/dev/null | grep -q "YubiKey"; then
     ok "YubiKey detected"
   else
-    warn "No YubiKey detected — using software Cosign keys (see HARDWARE-GAPS.md)"
+    warn "No YubiKey detected — using software Cosign keys"
   fi
 else
-  warn "ykman not installed — cannot verify YubiKey (see HARDWARE-GAPS.md)"
+  warn "ykman not installed — cannot verify YubiKey"
 fi
 
 # === 1. Dev environment setup ===
@@ -79,7 +79,7 @@ if [ ! -f cosign.pub ]; then
     info "YubiKey detected — generating hardware-backed key..."
     cosign generate-key-pair --kms yubikey://slot-id
   else
-    warn "Generating software Cosign keypair — migrate to YubiKey when available (see HARDWARE-GAPS.md)"
+    warn "Generating software Cosign keypair — migrate to YubiKey when available"
     cosign generate-key-pair
     chmod 600 cosign.key
   fi
@@ -158,22 +158,13 @@ case "$FLAVOR" in
 esac
 echo ""
 
-# === 7. Hardware gaps reminder ===
-info "Step 7/7: Hardware security checklist"
+# === 7. Next steps ===
+info "Step 7/7: Next steps"
 echo ""
-if [ -f "${SCRIPT_DIR}/HARDWARE-GAPS.md" ]; then
-  echo "  Review HARDWARE-GAPS.md for physical security items:"
-  echo ""
-  grep "^## [0-9]" "${SCRIPT_DIR}/HARDWARE-GAPS.md" | while read -r line; do
-    echo "    ${line#### }"
-  done
-  echo ""
-fi
 
 echo "  Next steps:"
 echo "    1. Run day-0 ceremony: talosctl health && ./verify.sh"
-echo "    2. Initialize Vault: see runbook.md"
-echo "    3. Configure Kanidm: see runbook.md"
+echo "    2. Initialize Vault: see docs/runbook.md"
+echo "    3. Configure Kanidm: see docs/runbook.md"
 echo "    4. Sign your images: cosign sign --key components/cosign/cosign.key <image>"
-echo "    5. For production: see HARDWARE-GAPS.md for YubiKey setup"
-echo "    6. Set up backups: bash scripts/backup-verify.sh"
+echo "    5. Set up backups: bash scripts/backup-verify.sh"

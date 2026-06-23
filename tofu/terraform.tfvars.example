@@ -5,7 +5,7 @@ domain        = "slam.lab"
 flavor        = "og"          # minimal | core | og | matrix | commet | rust
 node_hostname = "slam-node"
 install_disk  = "/dev/sda"
-git_repo_url  = "https://github.com/your-org/slam-stack.git"
+git_repo_url  = "https://github.com/JayDataEngineer/slam-stack.git"
 git_branch    = "master"
 
 # ─── Option A: target existing Talos node ──────────────────────────────

@@ -65,7 +65,7 @@ make deploy-minimal
 ### Option A — Existing Talos node
 
 ```bash
-git clone <repo> && cd slam-stack
+git clone https://github.com/JayDataEngineer/slam-stack.git && cd slam-stack
 export CLUSTER_API_ENDPOINT="10.0.0.2:50000"
 
 # Boot the node into Talos maintenance mode, then:
@@ -174,17 +174,18 @@ slam-stack/
 ├── deploy.sh               Component deployer (FLAVOR-aware)
 ├── verify.sh               Security verification suite
 ├── Makefile                Flavor-aware convenience targets
-├── SECURITY-MANIFESTO.md   Threat model and design principles
-├── HARDWARE-GAPS.md        Physical items to acquire
-├── RAM-OPTIONS.md          Memory budget analysis per flavor
-└── runbook.md              Operations runbook
+├── docs/                   Architecture docs, runbook, security manifesto
+│   ├── SECURITY-MANIFESTO.md  Threat model and design principles
+│   ├── RAM-OPTIONS.md         Memory budget analysis per flavor
+│   └── runbook.md             Operations runbook
+└── LICENSE                 MIT
 ```
 
 ---
 
 ## Security posture
 
-See [`SECURITY-MANIFESTO.md`](SECURITY-MANIFESTO.md) for the full threat
+See [`docs/SECURITY-MANIFESTO.md`](docs/SECURITY-MANIFESTO.md) for the full threat
 model and design principles. Key guarantees:
 
 - ✅ No unsigned images can run (Cosign + Kyverno enforcement)
@@ -211,7 +212,7 @@ model and design principles. Key guarantees:
 | commet | ~2.4 GiB | ~0.2 GiB (Tuwunel + Commet) | **~6.0 GiB** |
 | rust | ~2.4 GiB | ~0.2 GiB (Stalwart + Tuwunel) | **~6.0 GiB** |
 
-See [`RAM-OPTIONS.md`](RAM-OPTIONS.md) for the per-component breakdown.
+See [`docs/RAM-OPTIONS.md`](docs/RAM-OPTIONS.md) for the per-component breakdown.
 
 ---
 
@@ -259,26 +260,23 @@ Copy and adapt for your own workloads.
 
 ---
 
-## Verification
+## Test Suite
 
-Two e2e suites:
+Three-tier test architecture — all Tier 1 tests run in CI on every push/PR:
 
 ```bash
-# Pipeline check (offline — validates Flux Kustomize builds, dependency
-# chains, signature enforcement, policy coverage). Runs in CI without
-# a cluster.
-./scripts/e2e-flux.sh
-
-# Live cluster check (requires a deployed matrix flavor)
-./scripts/e2e-matrix.sh
+make test          # Tier 1: static + policy + flux + unit (no cluster)
+make test-static   # shellcheck + yamllint + kubeconform
+make test-policy   # Kyverno admission policy tests (6 cases)
+make test-unit     # Rust unit tests (sample-rust-app)
+make test-live     # Tier 2: curl endpoint checks (requires cluster)
+make test-browser  # Tier 3: Playwright UI tests via Docker
 ```
 
-The offline suite covers all six flavors — kustomize build, dependency
-chain integrity, HelmRepository references, signature key match,
-phase content validation.
+See [`tests/README.md`](tests/README.md) for details.
 
 ---
 
 ## License
 
-Private repository. All rights reserved.
+Licensed under the [MIT License](LICENSE).

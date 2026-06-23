@@ -49,7 +49,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 5m
-  url: https://github.com/yourorg/slam-stack  # CHANGE ME
+  url: https://github.com/JayDataEngineer/slam-stack  # CHANGE ME
   ref:
     branch: main
   secretRef:

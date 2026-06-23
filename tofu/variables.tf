@@ -54,7 +54,7 @@ variable "install_disk" {
 variable "git_repo_url" {
   description = "Git repository URL for Flux bootstrap"
   type        = string
-  default     = "https://github.com/your-org/slam-stack.git"
+  default     = "https://github.com/JayDataEngineer/slam-stack.git"
 }
 
 variable "git_branch" {

@@ -47,7 +47,7 @@ if [ -f "$COSIGN_KEY" ]; then
   cosign sign-blob --key "$COSIGN_KEY" --output-signature "$SIG_FILE" "$ENCRYPTED_FILE"
   ok "Signed: $SIG_FILE"
 else
-  warn "No Cosign key found — skipping signature (see HARDWARE-GAPS.md for YubiKey migration)"
+  warn "No Cosign key found — skipping signature (see YubiKey docs)"
   touch "$SIG_FILE"
 fi
 

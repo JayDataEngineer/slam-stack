@@ -6,48 +6,18 @@ An **extreme-security, zero-trust, defense-in-depth** Kubernetes cluster built o
 Talos Linux. Light enough to run on 4-8GB RAM while achieving military-grade
 security posture — "slam it on a table and you're good to go."
 
-## Architecture (Corrected)
+## Architecture
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                    Talos Linux (Immutable)                │
-│  ┌────────────────────────────────────────────────────┐  │
-│  │              Kata / Cloud Hypervisor (opt)          │  │
-│  │  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────────┐  │  │
-│  │  │App A │ │App B │ │Kanidm│ │Vault │ │Flavor App│  │  │
-│  │  │      │ │      │ │      │ │      │ │(OG/Matrix)│  │  │
-│  │  └──┬───┘ └──┬───┘ └──┬───┘ └──┬───┘ └────┬─────┘  │  │
-│  │     │         │        │        │          │         │  │
-│  │  ┌──┴─────────┴────────┴────────┴──────────┴──┐      │  │
-│  │  │  Cilium (eBPF + WireGuard + CiliumIdentity) │      │  │
-│  │  │  · Kernel-level WireGuard encryption         │      │  │
-│  │  │  · Label-based identity (not SPIFFE —        │      │  │
-│  │  │    SPIRE mTLS is beta + conflicts with WG)   │      │  │
-│  │  │  · Default deny (microsegmentation)          │      │  │
-│  │  └─────────────────────────────────────────────┘      │  │
-│  │  ┌─────────────────────────────────────────────┐      │  │
-│  │  │        Tetragon (eBPF Runtime)               │     │  │
-│  │  │  · Kills malicious syscalls at kernel level  │      │  │
-│  │  │  · Blocks shell, mount, packet tools         │      │  │
-│  │  └─────────────────────────────────────────────┘      │  │
-│  │  ┌─────────────────────────────────────────────┐      │  │
-│  │  │        Kyverno + Cosign (Admission)          │     │  │
-│  │  │  · Only signed images run                     │      │  │
-│  │  │  · No privileged containers                   │      │  │
-│  │  │  · Read-only rootfs + non-root enforced      │      │  │
-│  │  └─────────────────────────────────────────────┘      │  │
-│  │  ┌─────────────────────────────────────────────┐      │  │
-│  │  │        Mayastor (Block) + RustFS (Object)   │      │  │
-│  │  │  · NVMe-oF via SPDK (Rust)                   │      │  │
-│  │  │  · WORM-compatible object locking            │      │  │
-│  │  └─────────────────────────────────────────────┘      │  │
-│  └────────────────────────────────────────────────────┘  │
-│  ┌────────────────────────────────────────────────────┐  │
-│  │        Headscale / Cloudflare Tunnel               │  │
-│  │  · Zero inbound ports, outbound-only mesh          │  │
-│  └────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────┘
-```
+| Layer | Component | Role |
+|:-----:|-----------|------|
+| 🔒 | **Talos Linux** | Immutable OS — no SSH, no shell, API-only mTLS |
+| | **Kata / Cloud Hypervisor** *(optional)* | microVM isolation — each pod runs in its own KVM sandbox |
+| | **Cilium** | eBPF + WireGuard + CiliumIdentity — kernel-level encryption, label-based identity, default-deny microsegmentation |
+| | **Tetragon** | eBPF runtime enforcement — kills shells, mount, packet tools at kernel level |
+| | **Kyverno + Cosign** | Admission control — only signed images run, no privileged containers, read-only rootfs + non-root enforced |
+| | **Mayastor + RustFS** | Block (NVMe-oF via SPDK) + object storage (WORM-compatible locking) |
+| | **Headscale** | Mesh VPN — zero inbound ports, outbound-only tunneling |
+| 📦 | **Flavor Apps** | App workloads, Kanidm, Vault, messaging services — all running above the security layers |
 
 ## Architecture Decisions
 
@@ -193,7 +163,7 @@ export KUBECONFIG=~/.kube/slam-stack-config
 
 # 5. Set up GitOps
 kubectl apply -f components/flux/bootstrap.yaml
-flux bootstrap git --url=https://github.com/yourorg/slam-stack \
+flux bootstrap git --url=https://github.com/JayDataEngineer/slam-stack \
   --path=./clusters/prod
 
 # 6. Verify
@@ -252,7 +222,7 @@ kubectl exec -n identity deploy/kanidm -- kanidm person credential set-passkey <
 
 ### 5. Sign Your Images
 ```bash
-cosign sign --key cosign.key ghcr.io/yourorg/yourapp:latest
+cosign sign --key cosign.key ghcr.io/JayDataEngineer/yourapp:latest
 ```
 
 ### 6. Register Devices on Headscale
