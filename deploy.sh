@@ -134,6 +134,7 @@ trap 'rm -f "$SIG_POLICY_TMP"' EXIT
 # Read the actual pubkey (first line only for the BEGIN/END lines, but we need the whole key)
 COSIGN_PUB=$(cat "${COSIGN_DIR}/cosign.pub")
 # Build the key section with proper indentation (8 spaces for YAML)
+# shellcheck disable=SC2001  # sed needed for multiline indentation
 KEY_SECTION=$(echo "$COSIGN_PUB" | sed 's/^/        /')
 
 # Replace the placeholder in signature-policy.yaml

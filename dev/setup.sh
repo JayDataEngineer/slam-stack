@@ -132,7 +132,7 @@ d['clusters'][0]['cluster']['server'] = 'https://10.5.0.2:6443'
 with open('${HOME}/.kube/slam-stack-config', 'w') as f:
     yaml.dump(d, f)
 "
-sudo chown $(id -u):$(id -g) ~/.kube/slam-stack-config
+sudo chown "$(id -u):$(id -g)" ~/.kube/slam-stack-config
 ok "Kubeconfig: ~/.kube/slam-stack-config"
 
 export KUBECONFIG=~/.kube/slam-stack-config

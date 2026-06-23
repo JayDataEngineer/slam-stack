@@ -72,3 +72,103 @@ async fn main() {
     tracing::info!("listening on {addr}");
     axum::serve(listener, app).await.unwrap();
 }
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Unit tests — exercise handler logic without network I/O.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    fn test_app() -> Router {
+        Router::new()
+            .route("/healthz", get(healthz))
+            .route("/api/v1/hello", get(hello))
+            .route("/api/v1/echo", post(echo))
+    }
+
+    #[tokio::test]
+    async fn healthz_returns_200_ok() {
+        let resp = test_app()
+            .oneshot(Request::builder().uri("/healthz").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(&body[..], b"ok");
+    }
+
+    #[tokio::test]
+    async fn hello_with_name_returns_personalized_greeting() {
+        let resp = test_app()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/hello?name=Rust")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["message"], "Hello, Rust!");
+    }
+
+    #[tokio::test]
+    async fn hello_without_name_defaults_to_world() {
+        let resp = test_app()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/hello")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["message"], "Hello, world!");
+    }
+
+    #[tokio::test]
+    async fn echo_round_trips_json_body() {
+        let payload = r#"{"key":"value","nested":{"num":42}}"#;
+        let resp = test_app()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/echo")
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["echoed"]["key"], "value");
+        assert_eq!(json["echoed"]["nested"]["num"], 42);
+        assert!(json["received_at"].as_str().unwrap().contains('T'));
+    }
+
+    #[tokio::test]
+    async fn unknown_route_returns_404() {
+        let resp = test_app()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/nonexistent")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+}

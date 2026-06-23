@@ -1,0 +1,154 @@
+# =============================================================================
+# Slam Stack — CI Test Pipeline
+#
+# Three tiers of testing, mirroring the local `make test-*` targets:
+#   1. static   — shellcheck, yamllint, kubeconform (always runs)
+#   2. policy   — kyverno-cli policy tests (always runs)
+#   3. flux     — Flux pipeline build + dependency check (always runs)
+#   4. unit     — cargo test for Rust components (always runs)
+#   5. kind     — kind cluster smoke test (always runs)
+#
+# Browser (Playwright) and live endpoint tests require a real cluster
+# and are not part of CI — run them locally with `make test-browser`.
+# =============================================================================
+name: Test Suite
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # ────────────────────────────────────────────────────────────────────────
+  # Tier 1: Static Analysis
+  # ────────────────────────────────────────────────────────────────────────
+  static:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.32.0'
+
+      - name: Install kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Run static analysis
+        run: make -C tests test-static
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Tier 1: Kyverno Policy Tests
+  # ────────────────────────────────────────────────────────────────────────
+  policy:
+    name: Kyverno Policy Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Kyverno policy tests
+        run: make -C tests test-policy
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Tier 1: Flux Pipeline E2E
+  # ────────────────────────────────────────────────────────────────────────
+  flux:
+    name: Flux Pipeline E2E
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        flavor: [minimal, core, og, matrix, commet, rust]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Run Flux pipeline check
+        run: make -C tests test-flux FLAVOR=${{ matrix.flavor }}
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Tier 1: Rust Unit Tests
+  # ────────────────────────────────────────────────────────────────────────
+  unit:
+    name: Rust Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            workloads/sample-rust-app/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('workloads/sample-rust-app/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Run unit tests
+        run: make -C tests test-unit
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Tier 1.5: Kind Cluster Smoke Test
+  # ────────────────────────────────────────────────────────────────────────
+  kind:
+    name: Kind Smoke Test
+    runs-on: ubuntu-latest
+    needs: [static, policy]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.32.0'
+
+      - name: Install kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Run kind smoke test
+        run: make -C tests test-kind
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Aggregate gate
+  # ────────────────────────────────────────────────────────────────────────
+  all-tests-pass:
+    name: All Tests Pass
+    runs-on: ubuntu-latest
+    needs: [static, policy, flux, unit, kind]
+    if: always()
+    steps:
+      - name: Check all jobs
+        run: |
+          echo "Job results:"
+          echo "  static: ${{ needs.static.result }}"
+          echo "  policy: ${{ needs.policy.result }}"
+          echo "  flux:   ${{ needs.flux.result }}"
+          echo "  unit:   ${{ needs.unit.result }}"
+          echo "  kind:   ${{ needs.kind.result }}"
+
+          if [[ "${{ needs.static.result }}" != "success" || \
+                "${{ needs.policy.result }}" != "success" || \
+                "${{ needs.flux.result }}"   != "success" || \
+                "${{ needs.unit.result }}"   != "success" || \
+                "${{ needs.kind.result }}"   != "success" ]]; then
+            echo "::error::One or more test jobs failed"
+            exit 1
+          fi
+          echo "All test jobs passed!"

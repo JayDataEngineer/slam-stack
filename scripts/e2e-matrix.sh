@@ -20,8 +20,10 @@ echo "=== Slam Stack Matrix E2E ==="
 echo ""
 
 # Helper: run curl inside a pod's network
+# shellcheck disable=SC2329  # invoked indirectly
 run_in_pod() {
-  local ns="$1" pod="$2" shift 2
+  local ns="$1" pod="$2"
+  shift 2
   kubectl -n "$ns" exec "$pod" -- "$@" 2>/dev/null
 }
 
@@ -110,7 +112,7 @@ echo ""
 # ─── 4. Kanidm OIDC provider ──────────────────────────────────
 info "4. Kanidm OIDC provider"
 if [ -n "$KANIDM_POD" ]; then
-  KANIDM_POD_NAME=$(echo "$KANIDM_POD" | sed 's|pod/||')
+  KANIDM_POD_NAME=${KANIDM_POD#pod/}
 
   # Health check
   STATUS=$(kubectl -n "$IDENTITY_NS" exec "$KANIDM_POD_NAME" -- \
@@ -139,7 +141,7 @@ echo ""
 # ─── 5. OIDC end-to-end flow ──────────────────────────────────
 info "5. OIDC auth flow (authorization URL)"
 if [ -n "$KANIDM_POD" ] && [ -n "$TUWUNEL_POD" ]; then
-  KANIDM_POD_NAME=$(echo "$KANIDM_POD" | sed 's|pod/||')
+  KANIDM_POD_NAME=${KANIDM_POD#pod/}
 
   # Check that the authorize endpoint is reachable (returns a page, not 404)
   AUTH_RESP=$(kubectl -n "$IDENTITY_NS" exec "$KANIDM_POD_NAME" -- \

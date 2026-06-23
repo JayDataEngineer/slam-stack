@@ -5,6 +5,7 @@
 set -euo pipefail
 
 WEB_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC2034  # retained for potential future use
 PROJECT_DIR="$(cd "${WEB_DIR}/.." && pwd)"
 REGISTRY="${2:-localhost:5000}"
 IMAGE_TAG="${REGISTRY}/slam-stack-web:latest"

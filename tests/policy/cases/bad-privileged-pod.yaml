@@ -1,0 +1,37 @@
+# Non-compliant Pod — privileged container must be rejected.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: test-workload
+---
+apiVersion: v1
+kind: ServiceAccount
+automountServiceAccountToken: false
+metadata:
+  name: test-app-sa
+  namespace: test-workload
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-privileged-pod
+  namespace: test-workload
+spec:
+  serviceAccountName: test-app-sa
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+  containers:
+    - name: app
+      image: nginx:latest
+      securityContext:
+        privileged: true
+        readOnlyRootFilesystem: true
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        runAsUser: 10001
+        capabilities:
+          drop:
+            - ALL

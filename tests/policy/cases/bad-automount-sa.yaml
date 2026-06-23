@@ -1,0 +1,36 @@
+# Non-compliant Pod — automountServiceAccountToken not disabled, must be rejected.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: test-workload
+---
+apiVersion: v1
+kind: ServiceAccount
+automountServiceAccountToken: true
+metadata:
+  name: test-app-sa
+  namespace: test-workload
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-automount-pod
+  namespace: test-workload
+spec:
+  serviceAccountName: test-app-sa
+  # automountServiceAccountToken missing at pod level — should fail the check
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+  containers:
+    - name: app
+      image: nginx:latest
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        readOnlyRootFilesystem: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL

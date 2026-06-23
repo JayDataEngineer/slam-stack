@@ -164,7 +164,7 @@ echo ""
 if [ -f "${SCRIPT_DIR}/HARDWARE-GAPS.md" ]; then
   echo "  Review HARDWARE-GAPS.md for physical security items:"
   echo ""
-  grep "^## [0-9]" "${SCRIPT_DIR}/HARDWARE-GAPS.md" | while read line; do
+  grep "^## [0-9]" "${SCRIPT_DIR}/HARDWARE-GAPS.md" | while read -r line; do
     echo "    ${line#### }"
   done
   echo ""

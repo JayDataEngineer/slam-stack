@@ -25,3 +25,8 @@ tofu/modules/talos-vm/.cache/
 
 # Sample workload build artifacts
 workloads/sample-rust-app/target/
+
+# Playwright test results
+tests/browser/test-results/
+tests/browser/node_modules/
+tests/browser/package-lock.json

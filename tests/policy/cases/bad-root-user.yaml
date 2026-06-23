@@ -1,0 +1,28 @@
+# Non-compliant Pod — runs as root (uid 0), must be rejected.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: test-workload
+---
+apiVersion: v1
+kind: ServiceAccount
+automountServiceAccountToken: false
+metadata:
+  name: test-app-sa
+  namespace: test-workload
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-root-pod
+  namespace: test-workload
+spec:
+  serviceAccountName: test-app-sa
+  automountServiceAccountToken: false
+  containers:
+    - name: app
+      image: nginx:latest
+      securityContext:
+        runAsUser: 0
+        readOnlyRootFilesystem: true

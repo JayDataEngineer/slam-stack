@@ -24,7 +24,8 @@ CREATE_VMS ?=
 
 .PHONY: all bootstrap bootstrap-minimal bootstrap-og bootstrap-matrix bootstrap-rust setup \
         deploy deploy-minimal deploy-og deploy-matrix deploy-core deploy-rust deploy-commet \
-        verify e2e e2e-flux e2e-matrix web web-push sign clean cluster destroy tofu-* help
+        verify e2e e2e-flux e2e-matrix web web-push sign clean cluster destroy tofu-* \
+        test test-static test-policy test-unit test-flux test-live test-browser test-kind help
 
 all: help
 
@@ -161,6 +162,42 @@ destroy: clean
 	sudo rm -f /usr/local/bin/kubectl
 	sudo rm -f /usr/local/bin/helm
 	sudo rm -f /usr/local/bin/cosign
+
+# ──────────────────────────────────────────────────────────────────────────
+# Test suite — delegates to tests/Makefile
+# ──────────────────────────────────────────────────────────────────────────
+
+## test — Run all Tier 1 tests (static + policy + flux + unit, no cluster)
+test:
+	$(MAKE) -C tests test
+
+## test-static — shellcheck + yamllint + kubeconform (no cluster)
+test-static:
+	$(MAKE) -C tests test-static
+
+## test-policy — Kyverno admission policy tests (no cluster)
+test-policy:
+	$(MAKE) -C tests test-policy
+
+## test-flux — Flux pipeline build/lint check (no cluster)
+test-flux:
+	$(MAKE) -C tests test-flux FLAVOR=$(FLAVOR)
+
+## test-unit — Rust unit tests for sample-rust-app and web dashboard
+test-unit:
+	$(MAKE) -C tests test-unit
+
+## test-live — curl-based live endpoint checks (REQUIRES cluster)
+test-live:
+	$(MAKE) -C tests test-live
+
+## test-browser — Playwright UI tests via Docker (REQUIRES cluster)
+test-browser:
+	$(MAKE) -C tests test-browser
+
+## test-kind — Spin up kind cluster, deploy, run smoke tests
+test-kind:
+	$(MAKE) -C tests test-kind
 
 ## help — Show this message
 help:

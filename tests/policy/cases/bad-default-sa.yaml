@@ -1,0 +1,29 @@
+# Non-compliant Pod — uses the default ServiceAccount, must be rejected.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: test-workload
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-default-sa-pod
+  namespace: test-workload
+spec:
+  serviceAccountName: default
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+  containers:
+    - name: app
+      image: nginx:latest
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        readOnlyRootFilesystem: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL

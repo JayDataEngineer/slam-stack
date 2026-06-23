@@ -1,0 +1,55 @@
+# Compliant Pod — satisfies all slam-stack Kyverno policies.
+# Used to verify the "good" path (should be admitted).
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: test-workload
+---
+apiVersion: v1
+kind: ServiceAccount
+automountServiceAccountToken: false
+metadata:
+  name: test-app-sa
+  namespace: test-workload
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: good-pod
+  namespace: test-workload
+  labels:
+    app: test-app
+spec:
+  serviceAccountName: test-app-sa
+  automountServiceAccountToken: false
+  hostNetwork: false
+  hostPID: false
+  hostIPC: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    fsGroup: 10001
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: app
+      image: ghcr.io/slam-stack/sample-app@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        readOnlyRootFilesystem: true
+        allowPrivilegeEscalation: false
+        privileged: false
+        seccompProfile:
+          type: RuntimeDefault
+        capabilities:
+          drop:
+            - ALL
+      resources:
+        limits:
+          memory: "128Mi"
+          cpu: "250m"
+        requests:
+          memory: "64Mi"
+          cpu: "100m"

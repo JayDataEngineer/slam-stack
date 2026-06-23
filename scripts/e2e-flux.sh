@@ -74,7 +74,7 @@ echo ""
 # === 4. Every HelmRelease references an existing HelmRepository ===
 info "4. HelmRelease source references..."
 repos=$(grep '  name:' clusters/base/sources/helm-repositories.yaml | awk '{print $2}' | sort -u)
-for hr in $(find components -name 'helm-release.yaml' -type f 2>/dev/null); do
+while IFS= read -r hr; do
   repo=$(grep -A3 'sourceRef:' "$hr" | grep 'name:' | tail -1 | awk '{print $2}')
   comp=$(basename "$(dirname "$hr")")
   if echo "$repos" | grep -qx "$repo"; then
@@ -82,7 +82,7 @@ for hr in $(find components -name 'helm-release.yaml' -type f 2>/dev/null); do
   else
     fail "$comp references missing HelmRepository '$repo'"
   fi
-done
+done < <(find components -name 'helm-release.yaml' -type f 2>/dev/null)
 echo ""
 
 # === 5. No REPLACE_ME in manifests ===
