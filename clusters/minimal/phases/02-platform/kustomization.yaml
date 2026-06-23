@@ -1,0 +1,7 @@
+# Minimal phase 02 — cert-manager + Vault only.
+# No Mayastor (no NVMe block), no PostgreSQL (no DB).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../components/cert-manager
+  - ../../../../components/vault

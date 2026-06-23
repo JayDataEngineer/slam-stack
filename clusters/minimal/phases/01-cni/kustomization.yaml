@@ -1,0 +1,7 @@
+# Minimal phase 01 — Cilium + Kyverno admission control only.
+# No Tetragon (eBPF runtime), no Kata (microVM).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../components/cilium
+  - ../../../../components/kyverno

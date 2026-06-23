@@ -1,0 +1,18 @@
+# Slam Stack — Minimal Flavor Cluster Overlay
+# Ultra-minimalist: Cilium + Kyverno + cert-manager + Vault + Kanidm + Headscale.
+# Drops storage, DB, observability, registry, web, backup.
+# ~2.3 Gi RAM ceiling.
+#
+# Flux dependency chain:
+#   slam-sources → slam-cni → slam-platform → slam-identity
+#
+# Point Flux bootstrap at this path:
+#   flux bootstrap ... --path=./clusters/minimal
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - sources.yaml
+  - cni.yaml
+  - platform.yaml
+  - identity.yaml

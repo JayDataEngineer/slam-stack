@@ -1,0 +1,7 @@
+# Minimal phase 03 — Kanidm identity + Headscale mesh VPN only.
+# No VictoriaMetrics / VictoriaLogs (no metrics / log aggregation).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../components/kanidm
+  - ../../../../components/headscale

@@ -1,0 +1,7 @@
+# Minimal phase 00 — HelmRepositories needed by the minimal subset.
+# Shares the same helm-repositories.yaml as full flavors; repos that
+# aren't used (vm, openbao, cnpg, openebs, gabe565) are inert.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../base/sources

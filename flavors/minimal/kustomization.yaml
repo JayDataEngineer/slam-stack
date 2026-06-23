@@ -1,0 +1,6 @@
+# Slam Stack — Minimal Flavor
+# Empty flavor: no application components, just core platform.
+# Exists so clusters/minimal/flavor.yaml has a valid sync target.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources: []
