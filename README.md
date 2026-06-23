@@ -40,52 +40,23 @@ make deploy-minimal
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────┐
-│                    Hardware TPM 2.0                  │
-├─────────────────────────────────────────────────────┤
-│  Talos Linux — immutable OS, no SSH, API-only mTLS  │
-├─────────────────────────────────────────────────────┤
-│  Kata/Cloud Hypervisor — optional microVM isolation  │
-├─────────────────────────────────────────────────────┤
-│  Cilium + WireGuard — encrypted pod traffic,         │
-│  default-deny microsegmentation                      │
-├─────────────────────────────────────────────────────┤
-│  Tetragon — eBPF kernel-level process enforcement    │
-├─────────────────────────────────────────────────────┤
-│  Kyverno + Cosign — admission control, signed images │
-│  only, no root containers, read-only rootfs          │
-├─────────────────────────────────────────────────────┤
-│  OpenBao/Vault — dynamic secrets (15m rotation),     │
-│  TPM auto-unseal, PKI, transit encryption            │
-├─────────────────────────────────────────────────────┤
-│  cert-manager — automated TLS via Vault PKI,         │
-│  30-day certs with 7-day auto-renewal                │
-├─────────────────────────────────────────────────────┤
-│  Kanidm — passwordless SSO, WebAuthn/Passkeys,       │
-│  OAuth2 provider for dashboard + flavor apps         │
-├─────────────────────────────────────────────────────┤
-│  Mayastor (NVMe block) + RustFS (WORM object)        │
-│  — encrypted at rest, Vault-managed keys             │
-├─────────────────────────────────────────────────────┤
-│  VictoriaMetrics — metrics + alerting                │
-├─────────────────────────────────────────────────────┤
-│  VictoriaLogs — tamper-evident audit logging         │
-├─────────────────────────────────────────────────────┤
-│  Headscale — Tailscale-compatible mesh VPN           │
-│  (only path into the cluster)                        │
-├─────────────────────────────────────────────────────┤
-│  ┌───────────────────────────────────────────────┐  │
-│  │  Flavor Layer                                 │  │
-│  │  • minimal: (none — security plane only)     │  │
-│  │  • og: Stalwart + SimpleX                     │  │
-│  │  • matrix: Tuwunel + Cinny + LiveKit          │  │
-│  │  • rust: Stalwart + Tuwunel (both Rust)       │  │
-│  └───────────────────────────────────────────────┘  │
-├─────────────────────────────────────────────────────┤
-│  PostgreSQL/CNPG + Registry + Web Dashboard + Backup │
-└─────────────────────────────────────────────────────┘
-```
+| Layer | Component | Role |
+|:-----:|-----------|------|
+| 🔒 | **Hardware TPM 2.0** | Root of trust for measured boot and key sealing |
+| | **Talos Linux** | Immutable OS, no SSH, API-only mTLS |
+| | **Kata / Cloud Hypervisor** | Optional microVM isolation for untrusted workloads |
+| | **Cilium + WireGuard** | Encrypted pod traffic, default-deny microsegmentation |
+| | **Tetragon** | eBPF kernel-level process enforcement |
+| | **Kyverno + Cosign** | Admission control — signed images only, no root containers, read-only rootfs |
+| | **OpenBao / Vault** | Dynamic secrets (15m rotation), TPM auto-unseal, PKI, transit encryption |
+| | **cert-manager** | Automated TLS via Vault PKI — 30-day certs, 7-day auto-renewal |
+| | **Kanidm** | Passwordless SSO (WebAuthn/Passkeys), OAuth2 provider for dashboard + flavor apps |
+| | **Mayastor + RustFS** | NVMe block storage + WORM object storage — encrypted at rest, Vault-managed keys |
+| | **VictoriaMetrics** | Metrics collection + alerting |
+| | **VictoriaLogs** | Tamper-evident audit logging |
+| | **Headscale** | Tailscale-compatible mesh VPN — the only path into the cluster |
+| 📦 | **Flavor Layer** | `minimal` · `og` (Stalwart + SimpleX) · `matrix` (Tuwunel + Cinny + LiveKit) · `rust` (Stalwart + Tuwunel) |
+| 🗄️ | **PostgreSQL/CNPG · Registry · Web Dashboard · Backup** | Shared data, image registry, UI, and disaster recovery |
 
 ---
 
