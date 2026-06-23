@@ -42,12 +42,13 @@ run_kyverno_test() {
   local case_file="$3"
 
   local output
+  docker pull "$KYVERNO_CLI_IMAGE" >/dev/null 2>&1 || true
   output=$(docker run --rm \
     -v "$WORK_DIR:/work" -w /work \
     "$KYVERNO_CLI_IMAGE" \
     apply policies/ \
     --resource "cases/$case_file" \
-    2>&1 || true)
+    2>/dev/null || true)
 
   # Parse the kyverno summary line: "pass: N, fail: N, warn: N, error: N, skip: N"
   local fail_count error_count
@@ -83,12 +84,13 @@ run_compliant_pod_test() {
   local case_file="$2"
 
   local output
+  docker pull "$KYVERNO_CLI_IMAGE" >/dev/null 2>&1 || true
   output=$(docker run --rm \
     -v "$WORK_DIR:/work" -w /work \
     "$KYVERNO_CLI_IMAGE" \
     apply policies/ \
     --resource "cases/$case_file" \
-    2>&1 || true)
+    2>/dev/null || true)
 
   # The only acceptable failure is from the require-image-signature policy
   # (verifyImages requires real registry access). All other policy failures

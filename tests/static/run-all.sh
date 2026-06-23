@@ -34,15 +34,19 @@ if [ "${#SHELL_FILES[@]}" -eq 0 ]; then
   fail "No shell scripts found"
   FAILED=$((FAILED + 1))
 else
+  # Pull image quietly first so Docker progress doesn't pollute the output.
+  docker pull "$SHELLCHECK_IMAGE" >/dev/null 2>&1 || true
+
   # Strip the repo root so Docker paths are relative.
   REL_FILES=()
   for f in "${SHELL_FILES[@]}"; do
     REL_FILES+=("${f#"$REPO_ROOT"/}")
   done
+  # Capture stderr separately (Docker noise) — only shellcheck output on stdout.
   OUTPUT=$(docker run --rm -v "$REPO_ROOT:/work" -w /work \
     "$SHELLCHECK_IMAGE" \
     --format=gcc --color=never --exclude=SC1090,SC1091,SC2155 \
-    "${REL_FILES[@]}" 2>&1 || true)
+    "${REL_FILES[@]}" 2>/dev/null || true)
   if [ -z "$OUTPUT" ]; then
     pass "${#SHELL_FILES[@]} shell scripts clean"
   else
@@ -61,10 +65,11 @@ YAML_COUNT=$(find "$REPO_ROOT" \
   -not -path '*/.vm/*' -not -path '*/.terraform/*' \
   -type f \( -name '*.yaml' -o -name '*.yml' \) | wc -l)
 
+docker pull "$YAMLLINT_IMAGE" >/dev/null 2>&1 || true
 OUTPUT=$(docker run --rm -v "$REPO_ROOT:/work" -w /work \
   "$YAMLLINT_IMAGE" \
   yamllint -d "{extends: default, rules: {line-length: disable, document-start: disable, indentation: {indent-sequences: consistent}, trailing-spaces: disable, comments-indentation: disable, comments: {require-starting-space: true, ignore-shebangs: true}}" \
-  /work 2>&1 || true)
+  /work 2>/dev/null || true)
 ERRORS=$(echo "$OUTPUT" | grep -c ': error:' || true)
 WARNINGS=$(echo "$OUTPUT" | grep -c ': warning:' || true)
 if [ "$ERRORS" -eq 0 ]; then
@@ -104,9 +109,10 @@ validate_dir() {
   fi
 
   local output
+  docker pull "$KUBECONFORM_IMAGE" >/dev/null 2>&1 || true
   output=$(docker run --rm -v "$tmpfile:/manifests.yaml:ro" \
     "$KUBECONFORM_IMAGE" \
-    "${KUBECONFORM_OPTS[@]}" /manifests.yaml 2>&1 || true)
+    "${KUBECONFORM_OPTS[@]}" /manifests.yaml 2>/dev/null || true)
   rm -f "$tmpfile"
 
   # kubeconform output: "Summary: N resources found ... - Valid: X, Invalid: Y, Errors: Z, Skipped: W"
